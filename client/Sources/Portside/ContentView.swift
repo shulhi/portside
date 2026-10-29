@@ -134,7 +134,7 @@ struct ContentView: View {
         Spacer()
         Text(
           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.2.0"
+            ?? "0.2.1"
         )
         .foregroundStyle(.tertiary)
       }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)

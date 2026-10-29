@@ -3,20 +3,17 @@ import SwiftUI
 
 @main
 struct PortsideApp: App {
+  @NSApplicationDelegateAdaptor(AppLifecycle.self) private var lifecycle
   @StateObject private var model = AppModel()
 
   var body: some Scene {
-    WindowGroup("Portside") {
-      ContentView(model: model)
-        .frame(minWidth: 760, minHeight: 440)
-        .task { await model.restore() }
-        .onReceive(
-          NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
-        ) { _ in model.shutdown() }
+    Window("Portside", id: PortsideWindow.main) {
+      MainWindowView(model: model, lifecycle: lifecycle)
     }
     .defaultSize(width: 920, height: 560)
     .windowStyle(.hiddenTitleBar)
     .commands {
+      MainWindowCommands()
       CommandGroup(replacing: .newItem) {
         Button("New Forward…") {
           if let id = model.selectedServerID {

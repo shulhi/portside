@@ -22,6 +22,11 @@ This build is for local development. Distribution signing and notarization are
 not configured. Keychain may ask for permission again after rebuilding an
 ad-hoc-signed app; distribution builds should use a stable signing identity.
 
+The red traffic-light button closes the window while Portside keeps forwards
+and file transfers running. Click its Dock icon to show the window again, or
+use **Window → Show Portside (⌘0)**. Use **Portside → Quit Portside (⌘Q)** to
+quit and stop all forwards and transfers.
+
 ## Connect a work server
 
 1. Run the [Rust server](../server/README.md) on your work machine and keep
