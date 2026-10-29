@@ -8,13 +8,13 @@ struct PortsideApp: App {
   var body: some Scene {
     WindowGroup("Portside") {
       ContentView(model: model)
-        .frame(minWidth: 940, minHeight: 640)
+        .frame(minWidth: 760, minHeight: 440)
         .task { await model.restore() }
         .onReceive(
           NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
         ) { _ in model.stopAll() }
     }
-    .defaultSize(width: 1120, height: 740)
+    .defaultSize(width: 920, height: 560)
     .windowStyle(.hiddenTitleBar)
     .commands {
       CommandGroup(replacing: .newItem) {
