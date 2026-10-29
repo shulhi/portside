@@ -12,7 +12,7 @@ struct PortsideApp: App {
         .task { await model.restore() }
         .onReceive(
           NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
-        ) { _ in model.stopAll() }
+        ) { _ in model.shutdown() }
     }
     .defaultSize(width: 920, height: 560)
     .windowStyle(.hiddenTitleBar)
@@ -27,6 +27,11 @@ struct PortsideApp: App {
         }.keyboardShortcut("n")
         Button("Add Server…") { model.serverEditor = ServerEditorContext() }.keyboardShortcut(
           "n", modifiers: [.command, .shift])
+      }
+      CommandMenu("Transfer") {
+        Button("Paste Image or Files") { model.pasteFiles() }
+          .keyboardShortcut("v", modifiers: [.command, .shift])
+          .disabled(model.selectedServerID == nil)
       }
     }
   }

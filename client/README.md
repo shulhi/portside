@@ -36,8 +36,8 @@ ad-hoc-signed app; distribution builds should use a stable signing identity.
 
 Each forward can be started or stopped independently. **Stop** closes that
 forward's listener and active connections. Editing a forward restarts it when
-"Start after saving" is selected. Editing a server stops its forwards so old
-connections don't silently retain previous credentials or destination settings.
+"Start after saving" is selected. Editing a server stops its forwards and file
+transfers so old connections don't retain previous credentials or destinations.
 Server and forward removal requires confirmation.
 
 The green **Listening** state means the local listener is running. An individual
@@ -45,6 +45,33 @@ connection can still fail if the remote app is stopped; the card displays that
 error while keeping the listener available for a later retry. **Server ready**
 reports the most recent successful server check, rather than a continuous
 availability monitor.
+
+## Send files and clipboard images
+
+The selected server has a compact drop area below its forwarding list. Drop
+files there, click **Paste**, or focus the area and press **⌘V** to send a copied
+image or file. **Transfer → Paste Image or Files (⌘⇧V)** also works from anywhere
+in the app. The **+** button opens a file picker. Clipboard data is read only
+when you request a paste; it is not monitored in the background.
+
+The server must run version 0.2+ with `--upload-dir` configured. The included
+Ubuntu service defaults to `~/PortsideUploads`. Its base directory appears in
+the drop area; use the folder button to choose a relative subfolder per server.
+Changing a subfolder does not restart port forwards. Files already queued keep
+the destination they had when added.
+
+Transfers run in a queue with progress and cancellation. After success, click
+**Copy path** and paste the absolute server path into your remote agent chat.
+The history button provides paths for recent transfers in this app session.
+Copying the path does not itself attach an image; ask the agent to read the file.
+Upload history is kept in memory, while destination subfolders persist with
+your server profiles. Existing profiles migrate automatically.
+
+Regular files stream from disk; clipboard images preserve PNG bytes or convert
+other supported image representations to PNG. Matching filenames receive
+unique server names. Folder drops are rejected; zip a directory first. Files
+default to a 100 MiB limit, controlled by the server. Cancelling a transfer that
+has already been acknowledged can leave its completed file on the server.
 
 ## Settings and credentials
 

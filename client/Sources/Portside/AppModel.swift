@@ -34,6 +34,7 @@ final class AppModel: ObservableObject {
   @Published var errorMessage: String?
 
   let engine = ForwardEngine()
+  let transfers = FileTransferManager()
   private let store = ConfigurationStore()
   private let vault = TokenVault()
   private var observation: AnyCancellable?
@@ -84,6 +85,7 @@ final class AppModel: ObservableObject {
       throw error
     }
     for rule in configuration.forwards where rule.serverID == profile.id { stop(rule) }
+    transfers.cancel(serverID: profile.id)
     configuration = next
     selectedServerID = profile.id
     serverStates[profile.id] = .unchecked
@@ -98,6 +100,7 @@ final class AppModel: ObservableObject {
       for rule in configuration.forwards where rule.serverID == server.id { stop(rule) }
       configuration = next
       serverStates.removeValue(forKey: server.id)
+      transfers.cancel(serverID: server.id)
       selectedServerID = next.servers.first?.id
       do { try vault.delete(for: server.id) } catch {
         errorMessage =
@@ -205,6 +208,30 @@ final class AppModel: ObservableObject {
   }
 
   func open(_ rule: ForwardRule) { NSWorkspace.shared.open(rule.browserURL) }
+
+  func saveUploadFolder(_ folder: String, serverID: UUID) throws {
+    let folder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
+    try UploadDestination.validateFolder(folder)
+    guard let index = configuration.servers.firstIndex(where: { $0.id == serverID }) else { return }
+    var next = configuration
+    next.servers[index].uploadFolder = folder
+    try persist(next)
+    configuration = next
+    if serverStates[serverID]?.isChecking == true { serverStates[serverID] = .unchecked }
+  }
+
+  func pasteFiles() {
+    guard let server = selectedServer else {
+      errorMessage = "Select a server before sending files."
+      return
+    }
+    transfers.paste(server: server)
+  }
+
+  func shutdown() {
+    stopAll()
+    transfers.shutdown()
+  }
 
   private func persist(_ next: ClientConfiguration) throws {
     guard canSave else {

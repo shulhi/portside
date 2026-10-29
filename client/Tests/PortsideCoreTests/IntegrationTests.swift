@@ -7,6 +7,47 @@ import XCTest
 
 @MainActor
 final class IntegrationTests: XCTestCase {
+  func testFilesAndImagesUploadToTheSelectedServerSubfolder() async throws {
+    let server = try await RustServer.start()
+    defer { server.stop() }
+    var profile = server.profile
+    profile.uploadFolder = "project/screenshots"
+    let info = try await ServerAPI.info(for: profile, token: RustServer.token)
+    let settings = try XCTUnwrap(info.uploads)
+    let file = server.directory.appendingPathComponent("data & preview.bin")
+    let bytes = Data((0..<3 * 1024 * 1024).map { UInt8($0 % 251) })
+    try bytes.write(to: file)
+    let result = try await FileUploadAPI.upload(
+      .file(file), to: profile, token: RustServer.token, settings: settings)
+    XCTAssertEqual(result.bytes, Int64(bytes.count))
+    XCTAssertEqual(result.name, "data & preview.bin")
+    XCTAssertTrue(result.path.hasPrefix(settings.directory + "/project/screenshots/"))
+    XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: result.path)), bytes)
+    let imageBytes = Data([137, 80, 78, 71, 13, 10, 26, 10, 0, 255])
+    let first = try await FileUploadAPI.upload(
+      .image(name: "clipboard.png", data: imageBytes), to: profile, token: RustServer.token,
+      settings: settings)
+    let second = try await FileUploadAPI.upload(
+      .image(name: "clipboard.png", data: imageBytes), to: profile, token: RustServer.token,
+      settings: settings)
+    XCTAssertNotEqual(first.path, second.path)
+    XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: first.path)), imageBytes)
+  }
+
+  func testClientRejectsOversizedUploadsBeforeSending() async throws {
+    let server = try await RustServer.start(maxUploadBytes: 128)
+    defer { server.stop() }
+    let info = try await ServerAPI.info(for: server.profile, token: RustServer.token)
+    let settings = try XCTUnwrap(info.uploads)
+    do {
+      _ = try await FileUploadAPI.upload(
+        .image(name: "large.png", data: Data(repeating: 7, count: 256)), to: server.profile,
+        token: RustServer.token, settings: settings)
+      XCTFail("Oversized upload should fail")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("size limit")) }
+    XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: settings.directory).isEmpty)
+  }
+
   func testServerShutdownReleasesAHalfClosedTunnel() async throws {
     let server = try await RustServer.start()
     let target = try await TCPFixture.start(mode: .greetingThenRead)
@@ -230,7 +271,7 @@ private final class RustServer {
     self.directory = directory
   }
 
-  static func start() async throws -> RustServer {
+  static func start(maxUploadBytes: Int = 100 * 1024 * 1024) async throws -> RustServer {
     guard let binary = ProcessInfo.processInfo.environment["PORTSIDE_TEST_SERVER"] else {
       throw XCTSkip("Set PORTSIDE_TEST_SERVER to the Rust release binary to run end-to-end tests.")
     }
@@ -243,7 +284,11 @@ private final class RustServer {
       atPath: tokenFile.path, contents: Data(token.utf8), attributes: [.posixPermissions: 0o600])
     let process = Process()
     process.executableURL = URL(fileURLWithPath: binary)
-    process.arguments = ["serve", "--listen", "127.0.0.1:\(port)", "--token-file", tokenFile.path]
+    process.arguments = [
+      "serve", "--listen", "127.0.0.1:\(port)", "--token-file", tokenFile.path,
+      "--upload-dir", directory.appendingPathComponent("uploads").path, "--max-upload-bytes",
+      String(maxUploadBytes),
+    ]
     process.standardOutput = FileHandle.nullDevice
     process.standardError = FileHandle.nullDevice
     let server = RustServer(

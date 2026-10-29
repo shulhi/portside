@@ -34,15 +34,31 @@ public struct ServerProfile: Identifiable, Codable, Equatable, Sendable {
   public var name: String
   public var host: String
   public var port: UInt16
+  public var uploadFolder: String
 
-  public init(id: UUID = UUID(), name: String, host: String, port: UInt16 = 9417) {
+  public init(
+    id: UUID = UUID(), name: String, host: String, port: UInt16 = 9417, uploadFolder: String = ""
+  ) {
     self.id = id
     self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
     self.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
     self.port = port
+    self.uploadFolder = uploadFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private enum CodingKeys: String, CodingKey { case id, name, host, port, uploadFolder }
+
+  public init(from decoder: any Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    id = try values.decode(UUID.self, forKey: .id)
+    name = try values.decode(String.self, forKey: .name)
+    host = try values.decode(String.self, forKey: .host)
+    port = try values.decode(UInt16.self, forKey: .port)
+    uploadFolder = try values.decodeIfPresent(String.self, forKey: .uploadFolder) ?? ""
   }
 
   public func validate() throws {
+    try UploadDestination.validateFolder(uploadFolder)
     guard !name.isEmpty else { throw PortsideError.invalid("Give this server a name.") }
     guard port > 0 else {
       throw PortsideError.invalid("The server port must be between 1 and 65535.")
@@ -144,6 +160,7 @@ public struct ServerInfo: Decodable, Sendable {
   public let maxTunnels: Int
   public let activeTunnels: Int
   public let maxDataSize: Int
+  public let uploads: UploadSettings?
 
   public func allows(_ port: UInt16) -> Bool {
     guard port > 0, !excludedPorts.contains(port) else { return false }

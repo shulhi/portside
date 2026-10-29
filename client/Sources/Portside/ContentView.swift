@@ -132,7 +132,11 @@ struct ContentView: View {
         Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Palette.accent)
         Text("Via Tailscale")
         Spacer()
-        Text("0.1.0").foregroundStyle(.tertiary)
+        Text(
+          Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "0.2.0"
+        )
+        .foregroundStyle(.tertiary)
       }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)
         .help("Keep Tailscale connected on both machines.")
     }.background(.regularMaterial)
@@ -177,6 +181,7 @@ struct ContentView: View {
         }.font(.system(size: 11)).foregroundStyle(.secondary).padding(.bottom, 10)
 
         if model.visibleForwards.isEmpty { emptyForwards } else { forwardList }
+        FileDropView(model: model, transfers: model.transfers, server: server).padding(.top, 12)
       } else {
         welcome
       }

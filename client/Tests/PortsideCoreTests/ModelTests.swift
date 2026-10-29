@@ -4,6 +4,28 @@ import XCTest
 @testable import PortsideCore
 
 final class ModelTests: XCTestCase {
+  func testExistingServerProfilesDecodeWithAnEmptyUploadFolder() throws {
+    let id = UUID()
+    let data = Data("{\"id\":\"\(id)\",\"name\":\"Work\",\"host\":\"work\",\"port\":9417}".utf8)
+    let server = try JSONDecoder().decode(ServerProfile.self, from: data)
+    XCTAssertEqual(server.id, id)
+    XCTAssertEqual(server.uploadFolder, "")
+    XCTAssertEqual(
+      try JSONDecoder().decode(ServerProfile.self, from: JSONEncoder().encode(server)), server)
+  }
+
+  func testUploadFoldersStayRelativeToTheServerDirectory() throws {
+    for folder in ["", "screenshots", "project/images", "project name/screenshots"] {
+      XCTAssertNoThrow(try UploadDestination.validateFolder(folder))
+    }
+    for folder in ["/tmp", "..", "../escape", "a/./b", "a//b", "a\\b", "a\nb"] {
+      XCTAssertThrowsError(try UploadDestination.validateFolder(folder), folder)
+    }
+    XCTAssertEqual(
+      UploadDestination.displayPath(root: "/home/work/uploads", folder: "project/images"),
+      "/home/work/uploads/project/images")
+  }
+
   func testOnlyTailnetOrLoopbackHostsAreAccepted() {
     for host in [
       "127.0.0.1", "::1", "localhost", "100.64.0.1", "100.127.255.254", "fd7a:115c:a1e0::1",
@@ -64,7 +86,7 @@ final class ModelTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = ConfigurationStore(fileURL: directory.appendingPathComponent("config.json"))
     XCTAssertEqual(try store.load(), ClientConfiguration())
-    let server = ServerProfile(name: "Work", host: "work")
+    let server = ServerProfile(name: "Work", host: "work", uploadFolder: "project/screenshots")
     let rule = ForwardRule(
       serverID: server.id, name: "App", localPort: 3000, remotePort: 5173, autoStart: true)
     let config = ClientConfiguration(servers: [server], forwards: [rule])

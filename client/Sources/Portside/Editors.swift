@@ -30,8 +30,10 @@ struct ServerEditor: View {
         .system(size: 11)
       ).foregroundStyle(.secondary)
       if existing != nil {
-        Text("Saving changes stops this server's active forwards.").font(.system(size: 11))
-          .foregroundStyle(.secondary)
+        Text("Saving changes stops this server's forwards and file transfers.").font(
+          .system(size: 11)
+        )
+        .foregroundStyle(.secondary)
       }
       if let error {
         Text(error).font(.system(size: 12)).foregroundStyle(.red).fixedSize(
@@ -59,7 +61,9 @@ struct ServerEditor: View {
       guard let port = UInt16(port), port > 0 else {
         throw PortsideError.invalid("Enter a server port between 1 and 65535.")
       }
-      let profile = ServerProfile(id: existing?.id ?? UUID(), name: name, host: host, port: port)
+      let profile = ServerProfile(
+        id: existing?.id ?? UUID(), name: name, host: host, port: port,
+        uploadFolder: existing?.uploadFolder ?? "")
       try model.saveServer(profile, token: token)
       dismiss()
       Task { await model.check(profile) }
