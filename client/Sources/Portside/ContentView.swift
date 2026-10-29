@@ -16,7 +16,11 @@ struct ContentView: View {
   var body: some View {
     HStack(spacing: 0) {
       sidebar.frame(width: 236)
-      Divider()
+        .overlay(alignment: .trailing) {
+          Rectangle().fill(Color(nsColor: .separatorColor)).frame(width: 1)
+            .ignoresSafeArea(.container, edges: .vertical)
+            .allowsHitTesting(false)
+        }
       mainContent.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(Palette.canvas)
@@ -162,7 +166,8 @@ struct ContentView: View {
             Button("Stop All Forwards") { model.stopAll() }.disabled(model.activeCount == 0)
           } label: {
             Image(systemName: "ellipsis.circle").font(.system(size: 18)).foregroundStyle(.secondary)
-          }.menuStyle(.borderlessButton).frame(width: 24)
+          }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 24)
+            .accessibilityLabel("Server actions")
         }
       }.padding(.bottom, 26)
 
@@ -266,8 +271,10 @@ struct ContentView: View {
         Image(systemName: "server.rack").foregroundStyle(Palette.accent).font(.system(size: 17))
         VStack(alignment: .leading, spacing: 4) {
           Text(server.name).font(.system(size: 12, weight: .semibold))
-          Text("\(server.host):\(server.port)").font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(.secondary).textSelection(.enabled)
+          Text(verbatim: "\(server.host):\(server.port)").font(
+            .system(size: 11, design: .monospaced)
+          )
+          .foregroundStyle(.secondary).textSelection(.enabled)
         }
         Spacer()
         if state.isChecking {
@@ -378,13 +385,16 @@ private struct ForwardCard: View {
           Button("Remove Forward…", role: .destructive, action: remove)
         } label: {
           Image(systemName: "ellipsis").foregroundStyle(.secondary)
-        }.menuStyle(.borderlessButton).frame(width: 16)
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 24)
+          .accessibilityLabel("Forward actions")
       }
       HStack(spacing: 10) {
-        Text("localhost:\(rule.localPort)").foregroundStyle(listening ? Palette.accent : .primary)
+        Text(verbatim: "localhost:\(rule.localPort)").foregroundStyle(
+          listening ? Palette.accent : .primary)
         Image(systemName: "arrow.right").foregroundStyle(.tertiary)
-        Text("\(rule.family == .ipv4 ? "127.0.0.1" : "[::1]"):\(rule.remotePort)").foregroundStyle(
-          .secondary)
+        Text(verbatim: "\(rule.family == .ipv4 ? "127.0.0.1" : "[::1]"):\(rule.remotePort)")
+          .foregroundStyle(
+            .secondary)
         Spacer()
         if snapshot.receivedBytes > 0 {
           Text(
