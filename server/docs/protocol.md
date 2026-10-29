@@ -1,6 +1,6 @@
 # Portside TCP protocol v1
 
-This is the contract for the Rust server and future native Swift client.
+This is the contract for the Rust server and native Swift client.
 
 ## Connection model
 
@@ -71,7 +71,7 @@ Set the bearer and subprotocol headers on its URLRequest, verify the negotiated
 protocol in the session delegate, and configure network/transport permissions
 for the private server address as needed. Requests containing an `Origin`
 header are rejected. Tokens must not appear in URLs, query parameters or logs.
-The future macOS client should store the token in Keychain.
+The macOS client stores the token in Keychain.
 
 ## Binary application messages
 

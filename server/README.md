@@ -2,13 +2,12 @@
 
 Bring web apps running on a work server to your Mac's localhost over Tailscale.
 
-Portside has two parts: a Rust server on your work machine and a native Swift
-client on your Mac. This repository currently implements the **server**. The
-Swift application is the next component; this version does not yet create local
-forwarding listeners on your Mac.
+Portside has two parts: this Rust server on your work machine and a
+[native SwiftUI client](../client/README.md) on your Mac. The client creates
+local forwarding listeners and manages saved servers and port forwards.
 
 ```text
-Mac browser → Mac localhost:3000 → Swift client (next)
+Mac browser → Mac localhost:3000 → Swift client
                                       │
                                 Tailscale / WebSocket
                                       │
@@ -46,8 +45,8 @@ Create a token once:
 This generates 32 cryptographically random bytes as a 64-character hex token,
 creates a file with permissions `0600` on macOS/Linux, and refuses to overwrite
 an existing file. The token value is never printed or logged. Keep it outside
-version control and transfer it securely to your client when pairing is
-implemented. Each authenticated client can access the allowed loopback ports.
+version control and transfer it securely to the client using its Add server
+dialog. Each authenticated client can access the allowed loopback ports.
 
 With Tailscale running on the work server:
 
@@ -102,7 +101,7 @@ messages are binary, with a one-byte tag before TCP data; **plain WebSocket
 payloads are not the wire protocol**. See [the full protocol](docs/protocol.md)
 for framing, EOF, error handling, and the Swift client contract.
 
-The Swift client will own each local listening port and open a new tunnel for
+The Swift client owns each local listening port and opens a new tunnel for
 every accepted local TCP connection. To stop a forward it stops that local
 listener; it can either drain its established connections or close their
 WebSockets. Other forwards continue independently. A control connection is not
@@ -123,10 +122,10 @@ required to keep forwards alive.
   host/origin rules, hard-coded callback URLs, and HMR port settings still apply.
 - TCP half-closes, bounded buffering, connection limits, connect timeouts,
   heartbeats, and graceful shutdown are implemented.
-- UDP, automatic port discovery, service installation, client pairing UI, and
-  the Swift app are not implemented in this first server version.
-- Restoring local forwarding rules after sleep is a future client responsibility.
-  Broken TCP connections cannot be resumed; the browser/app must reconnect.
+- UDP, automatic port discovery, and service installation are not implemented.
+- The client can start saved forwarding rules on launch when opted in. Broken
+  TCP connections cannot be resumed after sleep or network loss; the browser/app
+  must reconnect.
 
 ## Verify
 
