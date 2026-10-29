@@ -1,0 +1,5 @@
+.DS_Store
+*.token
+/client/.build/
+/client/.swiftpm/
+/client/dist/

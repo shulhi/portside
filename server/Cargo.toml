@@ -1,0 +1,23 @@
+[package]
+name = "portside-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+description = "Private, dynamic TCP forwarding for Portside clients over Tailscale"
+
+[dependencies]
+anyhow = "1"
+axum = { version = "0.8", features = ["ws"] }
+clap = { version = "4", features = ["derive"] }
+futures-util = { version = "0.3", features = ["sink"] }
+getrandom = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+subtle = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "signal", "time", "sync", "fs"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tokio-tungstenite = "0.29"
