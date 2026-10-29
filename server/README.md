@@ -34,6 +34,42 @@ The binary is `target/release/portside-server`. Build it on the work server or
 for the work server's operating system and CPU architecture. The server source
 supports macOS and Linux; the test suite has been run on macOS.
 
+## Build for x86_64 Ubuntu from a Mac
+
+The repository includes a cross-build script using
+[cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild). It targets
+`x86_64-unknown-linux-gnu` with minimum glibc version `2.31`. This creates a
+Linux executable for Intel/AMD 64-bit servers from an Apple Silicon or Intel
+Mac. The native macOS build above does not produce a Linux executable.
+
+From `server/`, set up the tools and build once:
+
+```sh
+bash scripts/build-linux-x86_64.sh --setup
+```
+
+This installs pinned versions of cargo-zigbuild and Zig into the ignored
+`server/.cross-tools/` directory and adds the Linux standard library to your
+active Rust toolchain using rustup. It requires Rust/rustup, Python 3, internet
+access, and either uv or Python's venv/pip support. Tool caches stay under
+`server/target/`.
+
+Subsequent builds:
+
+```sh
+bash scripts/build-linux-x86_64.sh
+```
+
+The result is `server/target/x86_64-unknown-linux-gnu/release/portside-server`
+relative to the repository root. Transfer that executable to your Ubuntu
+server using your usual file-transfer method, then run `chmod +x` and
+`./portside-server --help` there. `uname -m` on the Ubuntu machine should report
+`x86_64`; `ldd --version` shows its installed glibc version. The build targets
+glibc 2.31 or newer and is dynamically linked, not a fully static binary.
+
+The cross-build has been verified to produce an x86_64 Linux ELF executable on
+macOS. It has not yet been executed on the work server.
+
 ## Run on your work server
 
 Create a token once:

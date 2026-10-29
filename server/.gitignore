@@ -1,4 +1,5 @@
 /target/
+/.cross-tools/
 *.token
 .DS_Store
 
