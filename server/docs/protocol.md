@@ -2,6 +2,48 @@
 
 This is the contract for the Rust server and native Swift client.
 
+## File uploads (server 0.2+)
+
+File transfer uses a separate authenticated HTTP endpoint on the same listener.
+It does not change the TCP tunnel protocol. `/v1/info` adds optional `uploads`:
+
+```json
+{"uploads":{"directory":"/home/work/PortsideUploads","max_file_size":104857600}}
+```
+
+`uploads` is null when disabled and absent on older servers. Upload one file:
+
+```http
+PUT /v1/files?filename=screenshot.png&folder=project/screenshots HTTP/1.1
+Authorization: Bearer <token>
+Content-Type: application/octet-stream
+Content-Length: <file-size>
+
+<raw-file-bytes>
+```
+
+Percent-encode query values. `folder` is optional and relative to the configured
+upload directory; absolute paths, dot segments, backslashes, control characters,
+and symlinks escaping the directory are rejected. `filename` is a basename, not
+a path. The server prefixes it with a timestamp and random identifier.
+
+Successful responses use HTTP 201:
+
+```json
+{"name":"screenshot.png","path":"/home/work/PortsideUploads/project/screenshots/1770000000-random-screenshot.png","bytes":4096}
+```
+
+Copy `path` verbatim into the remote agent chat. The server streams request
+bodies, supports chunked requests, measures their actual size, and never
+overwrites existing files. Failed/cancelled uploads remove temporary files.
+Limits are advertised by `/v1/info` and enforced independently of client checks.
+There is no file listing, deletion, or download endpoint.
+
+Domain errors use the existing JSON error shape. Statuses include 400 for bad
+names/folders or incomplete bodies, 401 for authentication, 403 for directory
+access/containment, 404 when uploads are disabled, 408 for the ten-minute
+deadline, 413 for size limits, 503 for capacity/shutdown, and 500 for disk I/O.
+
 ## Connection model
 
 A **forward** is a local listener owned by the client, for example

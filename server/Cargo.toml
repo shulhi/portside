@@ -1,6 +1,6 @@
 [package]
 name = "portside-server"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.93"
 description = "Private, dynamic TCP forwarding for Portside clients over Tailscale"
@@ -8,6 +8,7 @@ description = "Private, dynamic TCP forwarding for Portside clients over Tailsca
 [dependencies]
 anyhow = "1"
 axum = { version = "0.8", features = ["ws"] }
+cap-std = "4"
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", features = ["sink"] }
 getrandom = "0.3"
@@ -20,4 +21,5 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
+tempfile = "3"
 tokio-tungstenite = "0.29"

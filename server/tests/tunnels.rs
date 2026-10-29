@@ -40,6 +40,8 @@ impl Server {
             token: SECRET.parse().unwrap(),
             allowed_ports,
             max_tunnels,
+            upload_dir: None,
+            max_upload_bytes: 100 * 1024 * 1024,
         };
         let task = tokio::spawn(serve(listener, config, shutdown.clone()));
         Self {

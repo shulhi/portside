@@ -7,7 +7,8 @@ StartLimitIntervalSec=0
 Type=exec
 WorkingDirectory=%h
 EnvironmentFile=%h/.config/portside/server.env
-ExecStart=%h/portside-server serve --listen ${PORTSIDE_LISTEN} --token-file ${PORTSIDE_TOKEN_FILE}
+Environment=PORTSIDE_UPLOAD_DIR=%h/PortsideUploads
+ExecStart=%h/portside-server serve --listen ${PORTSIDE_LISTEN} --token-file ${PORTSIDE_TOKEN_FILE} --upload-dir ${PORTSIDE_UPLOAD_DIR}
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=10s

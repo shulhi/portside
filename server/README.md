@@ -121,6 +121,32 @@ port at runtime without a restart.
 Ctrl+C or SIGTERM closes the listener and active tunnels. Set `RUST_LOG=debug`
 to log tunnel lifecycle events. Traffic contents and credentials are not logged.
 
+## Receive files and pasted images
+
+Enable authenticated uploads by choosing a server-side destination directory:
+
+```sh
+./target/release/portside-server serve \
+  --listen "$(tailscale ip -4):9417" \
+  --token-file ./portside.token \
+  --upload-dir "$HOME/PortsideUploads"
+```
+
+The client can drop regular files or paste clipboard images into this directory,
+optionally choosing a relative subfolder such as `project/screenshots`. Each
+successful upload returns its absolute server path for pasting into a remote
+agent chat. Changing `--upload-dir` changes the base directory; clients cannot
+write outside it through subfolder paths or escaping symlinks.
+
+Uploads are disabled when `--upload-dir` is omitted. Enabled uploads default to
+100 MiB per file; change this with `--max-upload-bytes`. Four uploads can run
+concurrently, each with a ten-minute deadline. File bodies stream to disk.
+Files receive private permissions, unique names, and are published only after
+the transfer completes. Interrupted requests remove temporary files. Existing
+files are never overwritten. Filenames must be plain basenames up to 180 UTF-8
+bytes; directories must be zipped before sending. Uploaded files remain until
+you manage or delete them on the server.
+
 ## Run as an Ubuntu background service
 
 For an always-on work machine, use the included systemd **user service**. The
@@ -176,6 +202,16 @@ systemctl --user stop portside.service
 Restart the service after changing `server.env`. To stop it and disable automatic
 startup, use `systemctl --user disable --now portside.service`. This does not
 disable lingering for other user services.
+
+The included service enables uploads to `~/PortsideUploads`. To choose a
+different base directory, add an absolute path in `~/.config/portside/server.env`:
+
+```sh
+PORTSIDE_UPLOAD_DIR=/home/your-user/your-project/attachments
+```
+
+After updating from a version before 0.2, install both the new binary and the
+updated unit, then run `systemctl --user daemon-reload` and restart the service.
 
 ## API and Swift integration
 

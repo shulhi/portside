@@ -1,5 +1,6 @@
 pub mod config;
 mod tunnel;
+mod uploads;
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -13,7 +14,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, put},
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -31,6 +32,8 @@ struct AppState {
     capacity: Arc<Semaphore>,
     shutdown: CancellationToken,
     tasks: TaskTracker,
+    uploads: Option<Arc<uploads::UploadStore>>,
+    upload_capacity: Arc<Semaphore>,
 }
 
 /// The listener must use the validated address in config. Port zero is supported
@@ -48,11 +51,22 @@ pub async fn serve(
         "listener does not match configured address"
     );
     config.listen = bound;
+    let uploads = if let Some(directory) = config.upload_dir.clone() {
+        let limit = config.max_upload_bytes;
+        Some(Arc::new(
+            tokio::task::spawn_blocking(move || uploads::UploadStore::new(directory, limit))
+                .await??,
+        ))
+    } else {
+        None
+    };
     let state = AppState {
         capacity: Arc::new(Semaphore::new(config.max_tunnels)),
         config: Arc::new(config),
         shutdown: shutdown.clone(),
         tasks: TaskTracker::new(),
+        uploads,
+        upload_capacity: Arc::new(Semaphore::new(4)),
     };
     let app = Router::new()
         .route(
@@ -61,6 +75,7 @@ pub async fn serve(
         )
         .route("/v1/info", get(info))
         .route("/v1/tunnels/{port}", get(open_tunnel))
+        .route("/v1/files", put(uploads::upload))
         .fallback(|| async {
             ApiError::new(
                 StatusCode::NOT_FOUND,
@@ -129,6 +144,7 @@ async fn info(State(state): State<AppState>) -> Json<serde_json::Value> {
         "active_tunnels": state.config.max_tunnels - state.capacity.available_permits(),
         "max_data_size": MAX_DATA_SIZE,
         "loopback_families": ["ipv4", "ipv6"],
+        "uploads": state.uploads.as_ref().map(|store| store.info()),
     }))
 }
 

@@ -1,6 +1,7 @@
 use std::{
     net::{IpAddr, SocketAddr},
     ops::RangeInclusive,
+    path::PathBuf,
     str::FromStr,
 };
 
@@ -91,6 +92,8 @@ pub struct ServerConfig {
     pub token: Token,
     pub allowed_ports: PortPolicy,
     pub max_tunnels: usize,
+    pub upload_dir: Option<PathBuf>,
+    pub max_upload_bytes: u64,
 }
 
 impl ServerConfig {
@@ -102,6 +105,9 @@ impl ServerConfig {
         }
         if self.max_tunnels == 0 {
             bail!("max-tunnels must be greater than zero");
+        }
+        if self.max_upload_bytes == 0 {
+            bail!("max-upload-bytes must be greater than zero");
         }
         Ok(())
     }

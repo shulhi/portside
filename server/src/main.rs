@@ -42,6 +42,12 @@ enum Command {
         allowed_ports: PortPolicy,
         #[arg(long, default_value_t = 128, value_parser = clap::value_parser!(u16).range(1..))]
         max_tunnels: u16,
+        /// Allow authenticated file uploads into this directory and its subfolders.
+        #[arg(long)]
+        upload_dir: Option<PathBuf>,
+        /// Maximum size of each uploaded file in bytes (default: 100 MiB).
+        #[arg(long, default_value_t = 100 * 1024 * 1024, value_parser = clap::value_parser!(u64).range(1..))]
+        max_upload_bytes: u64,
     },
 }
 
@@ -60,6 +66,8 @@ async fn main() -> Result<()> {
             token_file,
             allowed_ports,
             max_tunnels,
+            upload_dir,
+            max_upload_bytes,
         } => {
             let metadata = fs::metadata(&token_file)
                 .context("cannot read token file; create one using generate-token")?;
@@ -81,6 +89,8 @@ async fn main() -> Result<()> {
                 token,
                 allowed_ports,
                 max_tunnels: max_tunnels as usize,
+                upload_dir,
+                max_upload_bytes,
             };
             config.validate()?;
             let listener = TcpListener::bind(listen).await.context("cannot bind server; confirm Tailscale is connected and the address belongs to this machine")?;
