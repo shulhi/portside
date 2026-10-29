@@ -121,6 +121,62 @@ port at runtime without a restart.
 Ctrl+C or SIGTERM closes the listener and active tunnels. Set `RUST_LOG=debug`
 to log tunnel lifecycle events. Traffic contents and credentials are not logged.
 
+## Run as an Ubuntu background service
+
+For an always-on work machine, use the included systemd **user service**. The
+server remains a foreground process supervised by systemd; it does not fork or
+detach itself. Systemd starts it automatically, restarts it after failures, and
+captures its logs independently of terminal or Rex sessions.
+
+These commands run on the Ubuntu server. Put the executable at
+`~/portside-server`, retain your existing private token file, and install the
+unit from `deploy/portside.service` into `~/.config/systemd/user/portside.service`:
+
+```sh
+mkdir -p ~/.config/systemd/user ~/.config/portside
+cp deploy/portside.service ~/.config/systemd/user/portside.service
+cat > ~/.config/portside/server.env <<EOF
+PORTSIDE_LISTEN=$(tailscale ip -4):9417
+PORTSIDE_TOKEN_FILE=$HOME/portside-token
+EOF
+chmod 600 ~/.config/portside/server.env
+systemd-analyze --user verify ~/.config/systemd/user/portside.service
+systemctl --user daemon-reload
+```
+
+Change `PORTSIDE_TOKEN_FILE` to the absolute path of your token file if needed.
+This environment file holds its path, not the token itself. The stored Tailscale
+address is stable for the device; update it if the device is re-enrolled with a
+different address. If Tailscale is unavailable at boot, the service retries every
+five seconds until binding succeeds.
+
+Stop any manually started Portside process before starting the service on the
+same port. This one-time transition closes its existing TCP tunnels; local
+Portside listeners can accept fresh browser connections afterward.
+
+```sh
+loginctl enable-linger "$USER"
+systemctl --user enable --now portside.service
+```
+
+Lingering lets your user manager start at boot and keep services running after
+logout. Some systems require administrator authorization for `enable-linger`;
+if denied, an administrator can run `sudo loginctl enable-linger <username>`.
+Portside itself runs as your normal user and does not need root access.
+
+Manage the daemon:
+
+```sh
+systemctl --user status portside.service
+journalctl --user -u portside.service -f
+systemctl --user restart portside.service
+systemctl --user stop portside.service
+```
+
+Restart the service after changing `server.env`. To stop it and disable automatic
+startup, use `systemctl --user disable --now portside.service`. This does not
+disable lingering for other user services.
+
 ## API and Swift integration
 
 All endpoints require `Authorization: Bearer <token>`:

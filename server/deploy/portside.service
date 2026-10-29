@@ -1,0 +1,22 @@
+[Unit]
+Description=Portside private TCP forwarding server
+# Tailscale may not have assigned its address when the user manager starts.
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+WorkingDirectory=%h
+EnvironmentFile=%h/.config/portside/server.env
+ExecStart=%h/portside-server serve --listen ${PORTSIDE_LISTEN} --token-file ${PORTSIDE_TOKEN_FILE}
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=portside-server
+
+[Install]
+WantedBy=default.target
