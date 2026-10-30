@@ -43,10 +43,10 @@ struct ServerEditor: View {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
         Button(existing == nil ? "Add server" : "Save changes") { save() }.buttonStyle(
-          .borderedProminent
+          .glassProminent
         ).keyboardShortcut(.defaultAction)
       }
-    }.padding(28).frame(width: 490).tint(Palette.accent)
+    }.padding(28).frame(width: 490).tint(Palette.accent).buttonStyle(.glass)
       .onAppear {
         if let existing {
           name = existing.name
@@ -114,10 +114,10 @@ struct ForwardEditor: View {
       HStack {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-        Button("Save forward") { save() }.buttonStyle(.borderedProminent).keyboardShortcut(
+        Button("Save forward") { save() }.buttonStyle(.glassProminent).keyboardShortcut(
           .defaultAction)
       }
-    }.padding(28).frame(width: 490).tint(Palette.accent)
+    }.padding(28).frame(width: 490).tint(Palette.accent).buttonStyle(.glass)
       .onAppear {
         if let rule = context.rule {
           name = rule.name

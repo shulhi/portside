@@ -49,7 +49,7 @@ struct FileDropView: View {
           folderError = nil
         } label: {
           Image(systemName: "folder.badge.gearshape")
-        }.buttonStyle(.plain).foregroundStyle(.secondary).help("Upload destination")
+        }.controlSize(.small).foregroundStyle(.secondary).help("Upload destination")
         Button("Paste") { transfers.paste(server: server) }.controlSize(.small)
           .help("Paste an image or copied files. You can also click the drop area and press ⌘V.")
         Button {
@@ -57,7 +57,7 @@ struct FileDropView: View {
         } label: {
           Image(systemName: "plus")
         }
-        .buttonStyle(.plain).help("Choose files to send")
+        .controlSize(.small).help("Choose files to send")
       }
       if let message = transfers.message {
         Text(message).font(.system(size: 10)).foregroundStyle(.orange).lineLimit(2)
@@ -112,7 +112,7 @@ struct FileDropView: View {
       } label: {
         Image(systemName: "clock.arrow.circlepath")
       }
-      .buttonStyle(.plain).help("Recent uploads")
+      .controlSize(.small).help("Recent uploads")
     }.font(.system(size: 10)).foregroundStyle(.secondary)
   }
 
@@ -136,9 +136,9 @@ struct FileDropView: View {
             try model.saveUploadFolder(folder, serverID: server.id)
             showingFolder = false
           } catch { folderError = error.localizedDescription }
-        }.buttonStyle(.borderedProminent)
+        }.buttonStyle(.glassProminent)
       }
-    }.padding(18).frame(width: 330).tint(Palette.accent)
+    }.padding(18).frame(width: 330).tint(Palette.accent).buttonStyle(.glass)
   }
 
   private var history: some View {
@@ -163,6 +163,6 @@ struct FileDropView: View {
           }
         }
       }.frame(maxHeight: 230)
-    }.padding(18).frame(width: 440)
+    }.padding(18).frame(width: 440).buttonStyle(.glass)
   }
 }

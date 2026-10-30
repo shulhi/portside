@@ -1,8 +1,11 @@
 # Portside for Mac
 
 A native SwiftUI application for bringing apps on your work server to this
-Mac's localhost through Tailscale. Requires macOS 14 or later and Swift 6.
+Mac's localhost through Tailscale. Requires macOS 27 or later and Xcode 27 or later.
 There are no third-party Swift dependencies.
+
+The interface uses native Liquid Glass buttons, menus, sheets, and window controls.
+The compact forwarding table keeps its content surface for readability.
 
 ## Build and open
 

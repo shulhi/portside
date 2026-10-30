@@ -32,6 +32,7 @@ struct ContentView: View {
     }
     .background(Palette.canvas)
     .tint(Palette.accent)
+    .buttonStyle(.glass)
     .sheet(item: $model.serverEditor) { context in
       ServerEditor(model: model, existing: context.server)
     }
@@ -90,7 +91,7 @@ struct ContentView: View {
           model.serverEditor = ServerEditorContext()
         } label: {
           Image(systemName: "plus").font(.system(size: 11, weight: .medium))
-        }.buttonStyle(.plain).help("Add server")
+        }.controlSize(.small).help("Add server")
       }.padding(.horizontal, 17).padding(.bottom, 9)
 
       ScrollView {
@@ -134,7 +135,7 @@ struct ContentView: View {
         Spacer()
         Text(
           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.2.1"
+            ?? "0.3.0"
         )
         .foregroundStyle(.tertiary)
       }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)
@@ -155,7 +156,7 @@ struct ContentView: View {
           }
         } label: {
           Label(model.selectedServer == nil ? "Add server" : "New forward", systemImage: "plus")
-        }.buttonStyle(.borderedProminent).controlSize(.regular).help("New forward (⌘N)")
+        }.buttonStyle(.glassProminent).controlSize(.regular).help("New forward (⌘N)")
         if let server = model.selectedServer {
           Menu {
             Button("Edit Server…") { model.serverEditor = ServerEditorContext(server: server) }
@@ -164,7 +165,7 @@ struct ContentView: View {
             Button("Stop All Forwards") { model.stopAll() }.disabled(model.activeCount == 0)
           } label: {
             Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(.secondary)
-          }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+          }.menuStyle(.button).menuIndicator(.hidden).controlSize(.small).frame(width: 26)
             .accessibilityLabel("Server actions")
         }
       }.padding(.bottom, 16)
@@ -194,7 +195,7 @@ struct ContentView: View {
         Text("NAME").frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
         Text("LOCAL → REMOTE").frame(width: 144, alignment: .leading)
         Text("STATUS").frame(width: 68, alignment: .leading)
-        Color.clear.frame(width: 106, height: 1)
+        Color.clear.frame(width: 122, height: 1)
       }.font(.system(size: 9, weight: .medium)).tracking(0.6).foregroundStyle(.secondary)
         .padding(.horizontal, 12).padding(.vertical, 9)
       Divider()
@@ -261,7 +262,7 @@ struct ContentView: View {
       Text("Bring its apps to localhost on this Mac.").font(.system(size: 12)).foregroundStyle(
         .secondary)
       Button("Add server") { model.serverEditor = ServerEditorContext() }
-        .buttonStyle(.borderedProminent).padding(.top, 3)
+        .buttonStyle(.glassProminent).padding(.top, 3)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
@@ -274,7 +275,7 @@ struct ContentView: View {
         if let id = model.selectedServerID {
           model.forwardEditor = ForwardEditorContext(serverID: id)
         }
-      }.buttonStyle(.bordered).padding(.top, 3)
+      }.padding(.top, 3)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
@@ -323,15 +324,15 @@ private struct ForwardRow: View {
           Text(status).lineLimit(1)
         }.font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 68, alignment: .leading)
           .help("\(snapshot.connections) active TCP connections")
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
           Button(action: open) {
             Image(systemName: "arrow.up.right.square").font(.system(size: 12))
           }
-          .buttonStyle(.plain).foregroundStyle(.secondary).disabled(!listening)
+          .controlSize(.small).foregroundStyle(.secondary).disabled(!listening)
           .help(Text(verbatim: "Open localhost:\(rule.localPort) in browser")).accessibilityLabel(
             "Open \(rule.name)")
           Button(starting ? "Cancel" : listening ? "Stop" : "Start", action: toggle)
-            .buttonStyle(.bordered).controlSize(.small).frame(width: 46)
+            .controlSize(.small).frame(width: 56)
           Menu {
             Button("Edit Forward…", action: edit)
             Button("Copy Local URL") {
@@ -348,9 +349,9 @@ private struct ForwardRow: View {
           } label: {
             Image(systemName: "ellipsis").foregroundStyle(.secondary)
           }
-          .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 20)
+          .menuStyle(.button).menuIndicator(.hidden).controlSize(.small).frame(width: 26)
           .accessibilityLabel("Actions for \(rule.name)")
-        }.frame(width: 106, alignment: .trailing)
+        }.frame(width: 122, alignment: .trailing)
       }.padding(.horizontal, 12).padding(.vertical, 8)
       if let error = snapshot.error {
         Label(error, systemImage: "exclamationmark.circle").font(.system(size: 10)).foregroundStyle(
