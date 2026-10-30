@@ -49,7 +49,8 @@ struct FileDropView: View {
           folderError = nil
         } label: {
           Image(systemName: "folder.badge.gearshape")
-        }.controlSize(.small).foregroundStyle(.secondary).help("Upload destination")
+        }.controlSize(.small).buttonBorderShape(.circle).foregroundStyle(.secondary)
+          .help("Upload destination")
         Button("Paste") { transfers.paste(server: server) }.controlSize(.small)
           .help("Paste an image or copied files. You can also click the drop area and press ⌘V.")
         Button {
@@ -57,7 +58,7 @@ struct FileDropView: View {
         } label: {
           Image(systemName: "plus")
         }
-        .controlSize(.small).help("Choose files to send")
+        .controlSize(.small).buttonBorderShape(.circle).help("Choose files to send")
       }
       if let message = transfers.message {
         Text(message).font(.system(size: 10)).foregroundStyle(.orange).lineLimit(2)
@@ -112,7 +113,7 @@ struct FileDropView: View {
       } label: {
         Image(systemName: "clock.arrow.circlepath")
       }
-      .controlSize(.small).help("Recent uploads")
+      .controlSize(.small).buttonBorderShape(.circle).help("Recent uploads")
     }.font(.system(size: 10)).foregroundStyle(.secondary)
   }
 
@@ -136,9 +137,10 @@ struct FileDropView: View {
             try model.saveUploadFolder(folder, serverID: server.id)
             showingFolder = false
           } catch { folderError = error.localizedDescription }
-        }.buttonStyle(.glassProminent)
+        }.buttonStyle(.glassProminent).tint(Palette.accent)
       }
-    }.padding(18).frame(width: 330).tint(Palette.accent).buttonStyle(.glass)
+    }.padding(18).frame(width: 330).buttonStyle(.glass(.regular.tint(nil)))
+      .buttonBorderShape(.capsule)
   }
 
   private var history: some View {
@@ -163,6 +165,7 @@ struct FileDropView: View {
           }
         }
       }.frame(maxHeight: 230)
-    }.padding(18).frame(width: 440).buttonStyle(.glass)
+    }.padding(18).frame(width: 440).buttonStyle(.glass(.regular.tint(nil)))
+      .buttonBorderShape(.capsule)
   }
 }

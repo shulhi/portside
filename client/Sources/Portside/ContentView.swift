@@ -31,8 +31,8 @@ struct ContentView: View {
       mainContent.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(Palette.canvas)
-    .tint(Palette.accent)
-    .buttonStyle(.glass)
+    .buttonStyle(.glass(.regular.tint(nil)))
+    .buttonBorderShape(.capsule)
     .sheet(item: $model.serverEditor) { context in
       ServerEditor(model: model, existing: context.server)
     }
@@ -91,7 +91,7 @@ struct ContentView: View {
           model.serverEditor = ServerEditorContext()
         } label: {
           Image(systemName: "plus").font(.system(size: 11, weight: .medium))
-        }.controlSize(.small).help("Add server")
+        }.controlSize(.small).buttonBorderShape(.circle).help("Add server")
       }.padding(.horizontal, 17).padding(.bottom, 9)
 
       ScrollView {
@@ -135,7 +135,7 @@ struct ContentView: View {
         Spacer()
         Text(
           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.3.0"
+            ?? "0.3.1"
         )
         .foregroundStyle(.tertiary)
       }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)
@@ -156,7 +156,10 @@ struct ContentView: View {
           }
         } label: {
           Label(model.selectedServer == nil ? "Add server" : "New forward", systemImage: "plus")
-        }.buttonStyle(.glassProminent).controlSize(.regular).help("New forward (⌘N)")
+        }
+        .font(.system(size: 12, weight: .medium))
+        .buttonStyle(.glass(.regular.tint(Palette.accent.opacity(0.10))))
+        .controlSize(.regular).help("New forward (⌘N)")
         if let server = model.selectedServer {
           Menu {
             Button("Edit Server…") { model.serverEditor = ServerEditorContext(server: server) }
@@ -164,8 +167,11 @@ struct ContentView: View {
             Divider()
             Button("Stop All Forwards") { model.stopAll() }.disabled(model.activeCount == 0)
           } label: {
-            Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(.secondary)
-          }.menuStyle(.button).menuIndicator(.hidden).controlSize(.small).frame(width: 26)
+            Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(.secondary).frame(width: 28, height: 28)
+          }.menuStyle(.borderlessButton).menuIndicator(.hidden).buttonStyle(.plain)
+            .frame(width: 28, height: 28).contentShape(.circle)
+            .glassEffect(.regular.interactive(), in: .circle)
             .accessibilityLabel("Server actions")
         }
       }.padding(.bottom, 16)
@@ -242,16 +248,20 @@ struct ContentView: View {
           )
           .foregroundStyle(Palette.accent).help("The last server connection check succeeded.")
         }
-        Button(state.isReady ? "Check" : "Connect") { Task { await model.check(server) } }
-          .controlSize(.small).disabled(state.isChecking)
+        Button {
+          Task { await model.check(server) }
+        } label: {
+          Label(state.isReady ? "Check" : "Connect", systemImage: "arrow.clockwise")
+        }
+        .controlSize(.small).disabled(state.isChecking)
       }
       if case .failed(let message) = state {
         Label(message, systemImage: "exclamationmark.circle").font(.system(size: 11))
           .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
       }
     }.padding(.horizontal, 11).padding(.vertical, 9)
-      .background(Palette.accent.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
-      .overlay(RoundedRectangle(cornerRadius: 7).stroke(Palette.accent.opacity(0.12)))
+      .background(Palette.surface.opacity(0.65), in: RoundedRectangle(cornerRadius: 9))
+      .overlay(RoundedRectangle(cornerRadius: 9).stroke(.primary.opacity(0.06)))
   }
 
   private var welcome: some View {
@@ -262,7 +272,7 @@ struct ContentView: View {
       Text("Bring its apps to localhost on this Mac.").font(.system(size: 12)).foregroundStyle(
         .secondary)
       Button("Add server") { model.serverEditor = ServerEditorContext() }
-        .buttonStyle(.glassProminent).padding(.top, 3)
+        .buttonStyle(.glass(.regular.tint(Palette.accent.opacity(0.10)))).padding(.top, 3)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
@@ -328,7 +338,8 @@ private struct ForwardRow: View {
           Button(action: open) {
             Image(systemName: "arrow.up.right.square").font(.system(size: 12))
           }
-          .controlSize(.small).foregroundStyle(.secondary).disabled(!listening)
+          .controlSize(.small).buttonBorderShape(.circle).foregroundStyle(.secondary)
+          .disabled(!listening)
           .help(Text(verbatim: "Open localhost:\(rule.localPort) in browser")).accessibilityLabel(
             "Open \(rule.name)")
           Button(starting ? "Cancel" : listening ? "Stop" : "Start", action: toggle)
@@ -347,9 +358,12 @@ private struct ForwardRow: View {
             Divider()
             Button("Remove Forward…", role: .destructive, action: remove)
           } label: {
-            Image(systemName: "ellipsis").foregroundStyle(.secondary)
+            Image(systemName: "ellipsis").font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(.secondary).frame(width: 24, height: 24)
           }
-          .menuStyle(.button).menuIndicator(.hidden).controlSize(.small).frame(width: 26)
+          .menuStyle(.borderlessButton).menuIndicator(.hidden).buttonStyle(.plain)
+          .frame(width: 24, height: 24).contentShape(.circle)
+          .glassEffect(.regular.interactive(), in: .circle)
           .accessibilityLabel("Actions for \(rule.name)")
         }.frame(width: 122, alignment: .trailing)
       }.padding(.horizontal, 12).padding(.vertical, 8)
