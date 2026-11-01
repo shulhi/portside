@@ -1,6 +1,7 @@
 # Portside TCP protocol v1
 
-This is the contract for the Rust server and native Swift client.
+This is the contract for the Rust server, native Swift Mac client, and Kotlin
+Android client. File uploads are currently implemented by the Mac client.
 
 ## File uploads (server 0.2+)
 
@@ -56,7 +57,7 @@ connections or treat WebSocket message boundaries as TCP packet boundaries.
 No create/delete-forward API or persistent control channel is needed on the
 server. It accepts target ports independently on each tunnel request. Forward
 labels, local port selection, saved rules, reconnect status and listener
-lifecycle belong to the Swift client. This allows dynamic changes without
+lifecycle belong to each client. This allows dynamic changes without
 affecting existing tunnels.
 
 ## Discovery
@@ -144,7 +145,7 @@ Forward HTTP upgrades, TLS records and arbitrary TCP payloads as bytes.
 
 When the local browser socket reaches read EOF, send `01`. The Rust server calls
 TCP write shutdown on the target, and keeps forwarding the target's response.
-When the target reaches read EOF, the server sends `01`. The Swift client must
+When the target reaches read EOF, the server sends `01`. The client must
 shut down the local socket's write direction and may continue reading local
 bytes until its own read EOF.
 

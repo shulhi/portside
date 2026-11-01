@@ -3,3 +3,8 @@
 /client/.build/
 /client/.swiftpm/
 /client/dist/
+/android/.gradle/
+/android/.kotlin/
+/android/**/build/
+/android/local.properties
+/android/.idea/
