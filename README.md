@@ -33,7 +33,7 @@ open dist/Portside.app
 See the [client guide](client/README.md) for setup, Keychain storage, and
 end-to-end testing. Server and client have independent build systems.
 
-Build the Android 17 client:
+Build the Android client (Android 16 or later):
 
 ```sh
 cd android

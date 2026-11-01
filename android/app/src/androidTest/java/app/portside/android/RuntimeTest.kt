@@ -2,6 +2,7 @@ package app.portside.android
 
 import android.Manifest
 import android.content.Context
+import android.os.Build
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -50,7 +51,9 @@ class RuntimeTest {
         val server = ServerProfile(name = "Runtime test", host = "127.0.0.1", port = serverPort!!)
         val first = ForwardRule(serverId = server.id, name = "one", localPort = freePort(), remotePort = targetPort!!)
         val second = ForwardRule(serverId = server.id, name = "two", localPort = freePort(), remotePort = targetPort)
-        instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.ACCESS_LOCAL_NETWORK)
+        if (Build.VERSION.SDK_INT >= 37) {
+            instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.ACCESS_LOCAL_NETWORK)
+        }
         instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         try {
             instrumentation.runOnMainSync { app.saveServer(server, testToken); app.saveForward(first); app.saveForward(second) }

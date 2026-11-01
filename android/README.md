@@ -1,7 +1,8 @@
 # Portside for Android
 
 A native Kotlin / Jetpack Compose client for **port forwarding**, using the same
-Rust server as the Mac app. Requires **Android 17 (API 37)**. Tailscale must be
+Rust server as the Mac app. Requires **Android 16 (API 36) or later**, and targets
+Android 17 (API 37). Tailscale must be
 connected on the phone and work server. Portside uses the existing Tailscale
 connection; it does not create another Android VPN.
 
@@ -36,7 +37,7 @@ signing are not configured.
 1. Keep the existing Portside Rust server running. No server upgrade is needed.
 2. Tap **Add server**. Enter its Tailscale IP or MagicDNS name, server port
    (`9417` by default), and the 64-character token from its token file.
-3. Allow local network / nearby device access when connecting. Allow
+3. On Android 17+, allow local network / nearby device access when connecting. Allow
    notifications when starting a forward so its controls appear outside the app.
 4. Tap **New forward**. For example, choose local `3000` and remote `5173`.
 5. Tap **Start**, then the browser icon. Your phone opens
