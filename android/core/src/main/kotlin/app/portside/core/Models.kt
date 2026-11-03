@@ -99,7 +99,3 @@ object TunnelFrame {
         }
     }
 }
-
-fun validateToken(value: String): String = value.trim().also {
-    require(it.matches(Regex("[0-9a-fA-F]{64}"))) { "Enter the server's 64-character hexadecimal token." }
-}

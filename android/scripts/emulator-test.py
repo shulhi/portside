@@ -37,10 +37,6 @@ class Target(http.server.BaseHTTPRequestHandler):
 
 with tempfile.TemporaryDirectory(prefix="portside-android-runtime-") as temporary:
     directory = Path(temporary)
-    token = "0123456789abcdef" * 4
-    token_path = directory / "test.token"
-    token_path.write_text(token)
-    token_path.chmod(0o600)
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         server_port = reservation.getsockname()[1]
@@ -50,14 +46,13 @@ with tempfile.TemporaryDirectory(prefix="portside-android-runtime-") as temporar
     with (directory / "server.log").open("wb") as log:
         server = subprocess.Popen([
             str(repo / "server/target/release/portside-server"), "serve", "--listen",
-            f"127.0.0.1:{server_port}", "--token-file", str(token_path),
+            f"127.0.0.1:{server_port}", "--tailscale-bin", str(repo / "server/tests/fixtures/tailscale.py"),
         ], stdout=subprocess.DEVNULL, stderr=log)
         try:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             for attempt in range(100):
                 try:
-                    request = urllib.request.Request(f"http://127.0.0.1:{server_port}/healthz",
-                                                     headers={"Authorization": f"Bearer {token}"})
+                    request = urllib.request.Request(f"http://127.0.0.1:{server_port}/healthz")
                     with opener.open(request, timeout=1) as response:
                         if response.status == 200:
                             break

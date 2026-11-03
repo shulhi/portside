@@ -38,6 +38,7 @@ class PortsideApplication : Application() {
         store = ConfigurationStore(this)
         try {
             val config = store.read()
+            store.write(config)
             state.value = AppState(configuration = config, selectedServerId = config.servers.firstOrNull()?.id)
             canSave = true
         } catch (_: Exception) { report("Saved settings could not be read. They have been preserved; clear app storage to reset them.") }
@@ -48,12 +49,11 @@ class PortsideApplication : Application() {
     fun snapshot(id: String, value: ForwardSnapshot) { state.update { it.copy(snapshots = it.snapshots + (id to value)) } }
     fun serverStatus(id: String, value: ServerStatus) { state.update { it.copy(serverStatuses = it.serverStatuses + (id to value)) } }
 
-    @Synchronized fun saveServer(server: ServerProfile, replacement: String) {
+    @Synchronized fun saveServer(server: ServerProfile) {
         server.validate()
-        val token = validateToken(replacement.ifBlank { store.token(server.id) })
         val config = state.value.configuration
         val next = config.copy(servers = config.servers.filterNot { it.id == server.id } + server)
-        persist(next, server.id to token)
+        persist(next)
         config.forwards.filter { it.serverId == server.id }.forEach { engine.stop(it.id) }
         state.update { it.copy(selectedServerId = server.id, serverStatuses = it.serverStatuses - server.id) }
     }
@@ -67,7 +67,7 @@ class PortsideApplication : Application() {
     }
     @Synchronized fun removeServer(id: String) {
         val config = state.value.configuration
-        persist(Configuration(config.servers.filterNot { it.id == id }, config.forwards.filterNot { it.serverId == id }), removeToken = id)
+        persist(Configuration(config.servers.filterNot { it.id == id }, config.forwards.filterNot { it.serverId == id }))
         config.forwards.filter { it.serverId == id }.forEach { engine.stop(it.id) }
         state.update { it.copy(selectedServerId = it.configuration.servers.firstOrNull()?.id, serverStatuses = it.serverStatuses - id) }
     }
@@ -75,26 +75,25 @@ class PortsideApplication : Application() {
         persist(state.value.configuration.let { it.copy(forwards = it.forwards.filterNot { rule -> rule.id == id }) })
         engine.stop(id)
     }
-    private fun persist(config: Configuration, token: Pair<String, String>? = null, removeToken: String? = null) {
+    private fun persist(config: Configuration) {
         check(canSave) { "Settings could not be loaded; the existing data has been preserved." }
-        store.write(config, token, removeToken)
+        store.write(config)
         revision++
         state.update { it.copy(configuration = config) }
     }
 
-    fun info(server: ServerProfile, token: String): ServerInfo {
-        val request = Request.Builder().url(server.url("/v1/info"))
-            .header("Authorization", "Bearer ${validateToken(token)}").build()
+    fun info(server: ServerProfile): ServerInfo {
+        val request = Request.Builder().url(server.url("/v1/info")).build()
         engine.http.newCall(request).execute().use { response ->
             check(response.isSuccessful) {
                 when (response.code) {
-                    401 -> "The server rejected this token. Update server settings."
-                    403 -> "The server denied access. Check its configuration."
+                    401 -> "Update this server to the Tailscale-authenticated Portside version."
+                    403 -> "This device is not owned by the server’s Tailscale user."
                     else -> "The server returned HTTP ${response.code}."
                 }
             }
             val json = JSONObject(response.body?.string() ?: error("Empty server response."))
-            check(json.getString("protocol") == TunnelFrame.PROTOCOL) { "This server uses an incompatible protocol." }
+            check(json.getString("authentication") == "tailscale-owner" && json.getString("protocol") == TunnelFrame.PROTOCOL) { "This server uses an incompatible protocol." }
             val allowed = json.getJSONArray("allowed_ports")
             val excluded = json.getJSONArray("excluded_ports")
             return ServerInfo(json.getString("version"), (0 until allowed.length()).map(allowed::getString),

@@ -30,7 +30,7 @@ bash scripts/build-app.sh
 open dist/Portside.app
 ```
 
-See the [client guide](client/README.md) for setup, Keychain storage, and
+See the [client guide](client/README.md) for setup, Tailscale identity authorization, and
 end-to-end testing. Server and client have independent build systems.
 The Mac app also bundles the Rust server: choose **Host this Mac** to access
 apps running on that Mac from your Android phone or another computer.
@@ -44,4 +44,5 @@ bash scripts/build.sh
 
 See the [Android guide](android/README.md) for installing the APK, connecting
 through Tailscale, and testing foreground port forwarding. Both clients use the
-same Rust server; no server changes are needed to add an Android device.
+same Tailscale-authenticated Rust server. Only devices on the server owner’s
+Tailscale account are allowed, and no Portside secret is needed.

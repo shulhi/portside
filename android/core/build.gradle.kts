@@ -7,4 +7,5 @@ dependencies {
 }
 tasks.test {
     systemProperty("portside.test.server", System.getenv("PORTSIDE_TEST_SERVER") ?: "")
+    systemProperty("portside.test.tailscale", System.getenv("PORTSIDE_TEST_TAILSCALE") ?: "")
 }

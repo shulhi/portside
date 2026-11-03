@@ -1,110 +1,91 @@
 # Portside for Android
 
-A native Kotlin / Jetpack Compose client for **port forwarding**, using the same
-Rust server as the Mac app. Requires **Android 16 (API 36) or later**, and targets
-Android 17 (API 37). Tailscale must be
-connected on the phone and work server. Portside uses the existing Tailscale
-connection; it does not create another Android VPN.
+A native Kotlin / Jetpack Compose port-forwarding client. Requires Android 16
+(API 36) or later, targets Android 17 (API 37), and uses the same Rust server as
+the Mac app. It uses the phone's existing Tailscale VPN; it creates no second VPN.
 
 ## Build and install
 
-Install Android Studio, Android SDK Platform 37, Build Tools 36.0.0, and a JDK
-supported by Gradle 9.6 (the bundled Android Studio JDK works). Open this
-`android/` directory in Android Studio, or run:
+Install Android Studio, SDK Platform 37, Build Tools 36.0.0 and a JDK supported by
+Gradle 9.6. Open `android/` in Android Studio, or run:
 
 ```sh
 cd android
 bash scripts/build.sh
-```
-
-The script uses Android Studio's bundled JDK and the standard macOS Android SDK
-location when those environment variables are unset. On other setups, set
-`JAVA_HOME` and `ANDROID_HOME`. Gradle and dependencies have pinned versions;
-the Gradle Wrapper verifies its distribution checksum.
-
-The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. Install it on a
-connected phone or emulator:
-
-```sh
 "$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-This is a locally signed development build. Play Store publishing and release
-signing are not configured.
+The APK is `app/build/outputs/apk/debug/app-debug.apk`. On macOS, scripts use
+Android Studio's bundled JDK and the usual SDK directory when environment
+variables are unset. Otherwise set `JAVA_HOME` and `ANDROID_HOME` to valid local
+installations. This is a locally signed development build; release signing and
+Play Store publishing are not configured. Dependency versions and the Gradle
+distribution checksum are pinned.
 
-## Use it
+## Connect and forward
 
-1. Keep the existing Portside Rust server running. No server upgrade is needed.
-2. Tap **Add server**. Enter its Tailscale IP or MagicDNS name, server port
-   (`9417` by default), and the 64-character token from its token file.
-3. On Android 17+, allow local network / nearby device access when connecting. Allow
-   notifications when starting a forward so its controls appear outside the app.
-4. Tap **New forward**. For example, choose local `3000` and remote `5173`.
-5. Tap **Start**, then the browser icon. Your phone opens
-   `http://127.0.0.1:3000`, connected to port `5173` on the work server's loopback.
+1. Keep Tailscale connected on the phone and work machine under the same account.
+2. Run the Tailscale-authenticated Portside server (0.3+) on the work machine,
+   or use **Host this Mac** in the updated Mac app.
+3. Tap **Add server** and enter its name, Tailscale IP or MagicDNS host, and server
+   port (`9417`). **There is no token or password field.** The server verifies
+   this phone's Tailscale identity and authorizes devices owned by its user.
+4. On Android 17+, allow local network / nearby device access when connecting.
+   Allow notifications when starting a forward so its controls stay visible.
+5. Tap **New forward**, choosing local `3000` and remote `5173`, for example.
+6. Tap **Start** and then the browser icon to open `http://127.0.0.1:3000`.
 
-`localhost` here belongs to **the phone**. Each forward starts and stops
-independently. Use the server picker to switch servers; running forwards on
-other servers keep working. The notification shows the total number of running
-forwards and provides **Stop all**. The server and forward menus support editing
-and removal, with confirmation before removal. Saving edits stops the affected
-forwards; tap Start to use the updated settings.
+Localhost belongs to **the phone**; the example reaches port 5173 on the work
+machine. Start and stop rules independently. Switching selected servers leaves
+running forwards intact. The notification shows all active forwards and has a
+**Stop all** action. Editing stops affected forwards; removal asks for confirmation.
 
-**Ready** reports the last successful server check. **Listening** means the
-phone's local listener is running. A refused remote target or a broken tunnel
-closes that individual TCP connection and displays an error; the listener stays
-available for the next connection. Existing TCP connections cannot resume after
-a network interruption.
+**Ready** means the most recent server check succeeded. **Listening** means the
+phone's local listener is available. Remote target failures close that TCP
+connection and leave the listener ready for new ones. Lost TCP connections cannot
+resume after a network interruption.
 
-The foreground service keeps forwards available while you use a browser or
-another app. Android can still suspend or stop work under power restrictions,
-force-stop, or reboot. Settings persist, but forwards start only when requested;
-the app does not restart them automatically at boot or after process death.
+A foreground service keeps forwarding while the browser or another app is open.
+Android can still suspend or stop work under power restrictions, force-stop or
+reboot. Profiles persist, but forwards start only on request. No boot-time restart
+or claim of uninterrupted background operation is made.
 
-## Credentials and transport
+## Identity and transport
 
-Profiles and rules are stored in private app preferences. Tokens are separately
-encrypted using AES-GCM with a non-exportable Android Keystore key, with the
-server ID as authenticated data. Settings and tokens are excluded from backup
-and device transfer. The token editor never displays an existing token; leave
-it blank when editing to retain it. Reinstalling/clearing app storage removes the
-configuration and requires entering tokens again.
+Only untagged devices owned by the server's Tailscale user are accepted. The
+server performs WhoIs against the actual peer address and denies other users or
+unavailable identity lookup. There is no legacy authentication mode. No shared
+Portside secret, Android Keystore credential or extra Tailscale login is used.
 
-The server uses HTTP/WebSocket inside the encrypted Tailscale network. The
-client permits only tailnet or loopback IPs, short MagicDNS names, and `.ts.net`
-names. DNS results must also resolve entirely to tailnet or loopback addresses.
-HTTP redirects and proxies are disabled so credentials remain on that route.
-If MagicDNS does not resolve on the phone, use the server's Tailscale IP.
+Profiles and rules live in private app preferences, excluded from backup and
+device transfer. Saving settings replaces unused credential values from earlier
+builds without reading or decrypting them. Tailscale supplies encryption for
+HTTP/WebSocket traffic. Client DNS results must all be tailnet or loopback IPs;
+HTTP redirects and proxies are disabled. If MagicDNS does not resolve, use the
+server's Tailscale IP. Keep Portside included in Tailscale's VPN app selection.
 
-Local listeners bind only to `127.0.0.1`; other devices cannot use the phone as
-a forwarding gateway. One authenticated WebSocket carries each TCP connection,
-including raw HTTP, TLS and WebSocket/HMR traffic. Both TCP half-closes are
-preserved. Buffers and concurrency are bounded (16 forwards, 32 connections).
-See the [shared protocol](../server/docs/protocol.md).
+Listeners bind only to `127.0.0.1`. One WebSocket carries each TCP connection,
+including HTTP, HTTPS and HMR bytes, with both half-closes preserved. Buffers and
+concurrency are bounded (16 forwards, 32 connections). See the
+[protocol](../server/docs/protocol.md). File uploads are implemented by the Mac
+client; this Android app focuses on port forwarding.
 
-## Verification
-
-Run JVM protocol and integration tests against a disposable native Rust server:
+## Tests
 
 ```sh
 bash scripts/test.sh
-```
-
-The tests cover address/port/token/frame validation, 3 MiB binary traffic, both
-half-close directions, authentication and target errors, independent stop, port
-conflicts, and loopback-only binding. Plain `./gradlew :core:test` skips Rust
-integration cases unless `PORTSIDE_TEST_SERVER` points to a native server binary.
-
-Run Android Keystore and foreground-service integration tests on an Android 17
-emulator:
-
-```sh
 bash scripts/test-emulator.sh
 ```
 
-This starts a disposable Rust server and HTTP target on the host, uses a temporary
-`adb reverse` mapping, and verifies actual HTTP forwarding with the activity in
-the background. It also verifies that stopping one listener leaves another
-working. The mapping, processes, and test profiles are removed afterward. The
-script chooses the single connected emulator; set `ANDROID_SERIAL` explicitly
-to select another test device. It installs the debug app and its test APK.
+The JVM tests run against a disposable Rust server with an isolated Tailscale CLI
+fixture. They cover address/port/frame validation, 3 MiB binary transfer, both
+half-close directions, identity and target failures, port conflicts, loopback-only
+binding and independent stop. Plain `./gradlew :core:test` needs both
+`PORTSIDE_TEST_SERVER` and `PORTSIDE_TEST_TAILSCALE` for integration cases.
+
+Emulator tests verify private profile persistence without credentials, actual
+foreground-service forwarding with the activity in the background, and stopping
+one forward while another remains usable. A disposable host Rust server and HTTP
+target are connected by a temporary `adb reverse` mapping; test profiles, mapping
+and processes are cleaned up afterward. The script selects the single connected
+emulator unless `ANDROID_SERIAL` is explicitly set. Use an Android 17 test emulator.

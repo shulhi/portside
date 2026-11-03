@@ -9,4 +9,5 @@ if [[ -z "${ANDROID_HOME:-}" && -d "$HOME/Library/Android/sdk" ]]; then
 fi
 cargo build --manifest-path ../server/Cargo.toml --release --locked
 export PORTSIDE_TEST_SERVER="$PWD/../server/target/release/portside-server"
+export PORTSIDE_TEST_TAILSCALE="$PWD/../server/tests/fixtures/tailscale.py"
 ./gradlew :core:test --rerun-tasks

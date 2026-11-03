@@ -31,7 +31,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -85,7 +84,7 @@ class MainActivity : ComponentActivity() {
         val revision = app.revision
         lifecycleScope.launch {
             try {
-                val info = withContext(Dispatchers.IO) { app.info(server, app.store.token(server.id)) }
+                val info = withContext(Dispatchers.IO) { app.info(server) }
                 if (revision == app.revision) app.serverStatus(server.id, ServerStatus(version = info.version))
             } catch (e: CancellationException) {
                 if (revision == app.revision) app.serverStatus(server.id, ServerStatus())
@@ -218,7 +217,7 @@ private fun PortsideScreen(
             }
         }
     }
-    if (showServer) ServerEditor(editingServer, onDismiss = { showServer = false }, onSave = { profile, token -> app.saveServer(profile, token) })
+    if (showServer) ServerEditor(editingServer, onDismiss = { showServer = false }, onSave = app::saveServer)
     if (showForward && server != null) ForwardEditor(server, editingForward, onDismiss = { showForward = false }, onSave = app::saveForward)
     removingForward?.let { rule ->
         ConfirmRemoval("Remove ${rule.name}?", "Its listener and active connections will close.", { removingForward = null }) {
@@ -226,7 +225,7 @@ private fun PortsideScreen(
         }
     }
     removingServer?.let { profile ->
-        ConfirmRemoval("Remove ${profile.name}?", "This removes its token and forwards, and closes their connections.", { removingServer = null }) {
+        ConfirmRemoval("Remove ${profile.name}?", "This removes its forwards and closes their connections.", { removingServer = null }) {
             runCatching { app.removeServer(profile.id) }.onFailure { app.report(it.message) }; removingServer = null
         }
     }
@@ -281,11 +280,10 @@ private fun ForwardCard(rule: ForwardRule, snapshot: ForwardSnapshot, onStart: (
 }
 
 @Composable
-private fun ServerEditor(existing: ServerProfile?, onDismiss: () -> Unit, onSave: (ServerProfile, String) -> Unit) {
+private fun ServerEditor(existing: ServerProfile?, onDismiss: () -> Unit, onSave: (ServerProfile) -> Unit) {
     var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
     var host by rememberSaveable { mutableStateOf(existing?.host ?: "") }
     var port by rememberSaveable { mutableStateOf(existing?.port?.toString() ?: "9417") }
-    var token by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "Add server" else "Edit server") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -294,9 +292,7 @@ private fun ServerEditor(existing: ServerProfile?, onDismiss: () -> Unit, onSave
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
             OutlinedTextField(port, { port = it }, label = { Text("Server port") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            OutlinedTextField(token, { token = it }, label = { Text(if (existing == null) "Server token" else "Replacement token (optional)") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-            Text(if (existing == null) "Tokens are encrypted with Android Keystore." else "Leave the token blank to keep it. Saving stops this server’s forwards.",
+            Text(if (existing == null) "Access uses your existing Tailscale identity." else "Access uses Tailscale identity. Saving stops this server’s forwards.",
                 style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
@@ -305,7 +301,7 @@ private fun ServerEditor(existing: ServerProfile?, onDismiss: () -> Unit, onSave
             try {
                 val parsed = port.toIntOrNull() ?: error("Enter a valid server port.")
                 val server = ServerProfile(id = existing?.id ?: java.util.UUID.randomUUID().toString(), name = name.trim(), host = host.trim(), port = parsed)
-                onSave(server, token.trim()); onDismiss()
+                onSave(server); onDismiss()
             } catch (e: Exception) { error = e.message }
         }) { Text("Save server") }
     })

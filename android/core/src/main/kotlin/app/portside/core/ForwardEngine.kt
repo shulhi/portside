@@ -25,8 +25,8 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
     val activeCount get() = listeners.size
 
     @Synchronized
-    fun start(rule: ForwardRule, server: ServerProfile, token: String) {
-        rule.validate(); server.validate(); validateToken(token)
+    fun start(rule: ForwardRule, server: ServerProfile) {
+        rule.validate(); server.validate()
         require(rule.serverId == server.id) { "This forward belongs to a different server." }
         listeners[rule.id]?.let { it.emit(); return }
         require(listeners.size < 16) { "At most 16 forwards can run at once." }
@@ -36,7 +36,7 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
             socket.reuseAddress = true
             socket.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), rule.localPort), 32)
         } catch (e: Exception) { socket.close(); throw e }
-        val listener = Listener(rule, server, token, socket)
+        val listener = Listener(rule, server, socket)
         listeners[rule.id] = listener
         listener.emit()
         listenerThreads.execute { listener.accept() }
@@ -55,7 +55,7 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
     }
 
     private inner class Listener(
-        val rule: ForwardRule, val server: ServerProfile, val token: String, val socket: ServerSocket,
+        val rule: ForwardRule, val server: ServerProfile, val socket: ServerSocket,
     ) {
         val running = AtomicBoolean(true)
         val tunnels = ConcurrentHashMap<String, Tunnel>()
@@ -102,7 +102,6 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
                     val url = server.url("/v1/tunnels/${rule.remotePort}").newBuilder()
                         .addQueryParameter("family", rule.family).build()
                     val request = Request.Builder().url(url)
-                        .header("Authorization", "Bearer $token")
                         .header("Sec-WebSocket-Protocol", TunnelFrame.PROTOCOL).build()
                     val connection = http.newWebSocket(request, this)
                     ws = connection
@@ -163,8 +162,8 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { finish() }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val message = when (response?.code) {
-                    401 -> "The server rejected this token. Update server settings."
-                    403 -> "The server denied this port. Check its port policy."
+                    401 -> "Update this server to the Tailscale-authenticated Portside version."
+                    403 -> "This device or app port is not allowed. Check Tailscale and the server port policy."
                     502 -> "The remote app is not listening on this port."
                     503 -> "The server is busy or shutting down."
                     504 -> "The remote app connection timed out."

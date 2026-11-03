@@ -16,7 +16,7 @@
         android:theme="@style/Theme.Portside"
         android:usesCleartextTraffic="true">
         <!-- Tailscale provides transport encryption. Core rejects non-tailnet DNS/IPs,
-             redirects and HTTP proxies before sending the bearer token. -->
+             redirects and HTTP proxies; server authorization uses Tailscale identity. -->
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

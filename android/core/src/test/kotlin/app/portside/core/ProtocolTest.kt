@@ -27,10 +27,9 @@ class ProtocolTest {
         }
     }
 
-    @Test fun portsTokensAndFamiliesAreValidated() {
+    @Test fun portsAndFamiliesAreValidated() {
         assertThrows(IllegalArgumentException::class.java) { ForwardRule(serverId = "a", name = "test", localPort = 80, remotePort = 3000).validate() }
         assertThrows(IllegalArgumentException::class.java) { ForwardRule(serverId = "a", name = "test", localPort = 3000, remotePort = 65536).validate() }
-        assertThrows(IllegalArgumentException::class.java) { validateToken("x".repeat(40) + "\nInjected: header") }
         assertEquals("http://[fd7a:115c:a1e0::1]:9417/v1/info", ServerProfile(name = "test", host = "fd7a:115c:a1e0::1").url("/v1/info").toString())
         assertEquals("http://127.0.0.1:3000", ForwardRule(serverId = "a", name = "test", localPort = 3000, remotePort = 5173).browserUrl)
     }

@@ -58,12 +58,11 @@ class ForwardService : Service() {
                 val rule = config.forwards.firstOrNull { it.id == id } ?: error("This forward was removed.")
                 val server = config.servers.first { it.id == rule.serverId }
                 val revision = app.revision
-                val token = app.store.token(server.id)
-                val info = withContext(Dispatchers.IO) { app.info(server, token) }
+                val info = withContext(Dispatchers.IO) { app.info(server) }
                 check(revision == app.revision) { "Settings changed. Start this forward again." }
                 check(info.allows(rule.remotePort)) { "The server does not allow this remote port." }
                 app.serverStatus(server.id, ServerStatus(version = info.version))
-                app.engine.start(rule, server, token)
+                app.engine.start(rule, server)
             } catch (e: CancellationException) {
                 if (starts[id] === currentCoroutineContext()[Job]) app.engine.stop(id)
                 throw e

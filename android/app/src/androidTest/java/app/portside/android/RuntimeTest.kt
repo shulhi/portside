@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit
 class RuntimeTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val app get() = instrumentation.targetContext.applicationContext as PortsideApplication
-    private val testToken = "0123456789abcdef".repeat(4)
     private fun freePort() = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
     private fun waitFor(test: () -> Boolean) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
@@ -31,15 +30,13 @@ class RuntimeTest {
         }
     }
 
-    @Test fun tokensAreEncryptedAndProfilesSurviveStoreRecreation() {
-        val server = ServerProfile(name = "Keystore test", host = "127.0.0.1")
+    @Test fun profilesPersistWithoutCredentials() {
+        val server = ServerProfile(name = "Profile test", host = "127.0.0.1")
         try {
-            instrumentation.runOnMainSync { app.saveServer(server, testToken) }
+            instrumentation.runOnMainSync { app.saveServer(server) }
             val secondStore = ConfigurationStore(app)
             assertEquals(server, secondStore.read().servers.first { it.id == server.id })
-            assertEquals(testToken, secondStore.token(server.id))
-            val persisted = app.getSharedPreferences("portside", Context.MODE_PRIVATE).all.values.joinToString()
-            assertFalse(persisted.contains(testToken))
+            assertEquals(setOf("configuration"), app.getSharedPreferences("portside", Context.MODE_PRIVATE).all.keys)
         } finally { instrumentation.runOnMainSync { app.removeServer(server.id) } }
     }
 
@@ -56,7 +53,7 @@ class RuntimeTest {
         }
         instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
         try {
-            instrumentation.runOnMainSync { app.saveServer(server, testToken); app.saveForward(first); app.saveForward(second) }
+            instrumentation.runOnMainSync { app.saveServer(server); app.saveForward(first); app.saveForward(second) }
             ActivityScenario.launch(MainActivity::class.java).use { activity ->
                 activity.onActivity { ForwardService.start(it, first.id); ForwardService.start(it, second.id) }
                 waitFor { listOf(first, second).all { app.state.value.snapshots[it.id]?.phase == Phase.LISTENING } }

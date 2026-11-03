@@ -28,15 +28,14 @@ class ForwardIntegrationTest {
             assumeTrue("Set PORTSIDE_TEST_SERVER to run real Rust-server integration tests", it.isNotBlank())
         }
         val directory = Files.createTempDirectory("portside-android-test")
-        val token = "0123456789abcdef".repeat(4)
         val port = freePort()
         val profile = ServerProfile(name = "test", host = "127.0.0.1", port = port)
         val process: Process
         init {
-            val path = directory.resolve("test.token")
-            Files.writeString(path, token)
-            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"))
-            process = ProcessBuilder(binary, "serve", "--listen", "127.0.0.1:$port", "--token-file", path.toString())
+            val path = directory.resolve("tailscale.py")
+            Files.copy(java.nio.file.Path.of(System.getProperty("portside.test.tailscale")), path)
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rwx------"))
+            process = ProcessBuilder(binary, "serve", "--listen", "127.0.0.1:$port", "--tailscale-bin", path.toString())
                 .redirectError(directory.resolve("server.log").toFile()).start()
             waitFor { runCatching { Socket("127.0.0.1", port).close() }.isSuccess }
         }
@@ -64,7 +63,7 @@ class ForwardIntegrationTest {
                     val states = ConcurrentHashMap<String, ForwardSnapshot>()
                     ForwardEngine { id, snapshot -> states[id] = snapshot }.use { engine ->
                         val rule = ForwardRule(serverId = rust.profile.id, name = "binary", localPort = freePort(), remotePort = target.localPort)
-                        engine.start(rule, rust.profile, rust.token)
+                        engine.start(rule, rust.profile)
                         Socket("127.0.0.1", rule.localPort).use { local ->
                             local.soTimeout = 15000
                             local.getOutputStream().write(payload)
@@ -96,7 +95,7 @@ class ForwardIntegrationTest {
                     }
                     ForwardEngine { _, _ -> }.use { engine ->
                         val rule = ForwardRule(serverId = rust.profile.id, name = "half-close", localPort = freePort(), remotePort = target.localPort)
-                        engine.start(rule, rust.profile, rust.token)
+                        engine.start(rule, rust.profile)
                         Socket("127.0.0.1", rule.localPort).use { local ->
                             local.soTimeout = 10000
                             assertEquals("hello", String(local.getInputStream().readBytes()))
@@ -114,16 +113,18 @@ class ForwardIntegrationTest {
             val states = ConcurrentHashMap<String, ForwardSnapshot>()
             ForwardEngine { id, value -> states[id] = value }.use { engine ->
                 val rule = ForwardRule(serverId = rust.profile.id, name = "auth", localPort = freePort(), remotePort = freePort())
-                engine.start(rule, rust.profile, "f".repeat(64))
+                Files.writeString(rust.directory.resolve("tailscale.peer"), "8")
+                engine.start(rule, rust.profile)
                 Socket("127.0.0.1", rule.localPort).use { local ->
                     local.soTimeout = 10000
                     runCatching { local.getInputStream().read() }
                 }
                 waitFor { states[rule.id]?.error != null }
-                assertTrue(states[rule.id]!!.error!!.contains("token"))
+                assertTrue(states[rule.id]!!.error!!.contains("not allowed"))
                 assertEquals(Phase.LISTENING, states[rule.id]?.phase)
                 engine.stop(rule.id)
-                engine.start(rule, rust.profile, rust.token)
+                Files.writeString(rust.directory.resolve("tailscale.peer"), "7")
+                engine.start(rule, rust.profile)
                 Socket("127.0.0.1", rule.localPort).use { local ->
                     local.soTimeout = 10000
                     runCatching { local.getInputStream().read() }
@@ -140,9 +141,9 @@ class ForwardIntegrationTest {
         val first = ForwardRule(serverId = server.id, name = "one", localPort = freePort(), remotePort = 3000)
         val second = ForwardRule(serverId = server.id, name = "two", localPort = freePort(), remotePort = 3001)
         ForwardEngine { _, _ -> }.use { engine ->
-            engine.start(first, server, "f".repeat(64)); engine.start(second, server, "f".repeat(64))
+            engine.start(first, server); engine.start(second, server)
             assertEquals(2, engine.activeCount)
-            assertThrows(IllegalArgumentException::class.java) { engine.start(first.copy(id = "duplicate"), server, "f".repeat(64)) }
+            assertThrows(IllegalArgumentException::class.java) { engine.start(first.copy(id = "duplicate"), server) }
             engine.stop(first.id)
             assertEquals(1, engine.activeCount)
             assertThrows(java.io.IOException::class.java) { Socket("127.0.0.1", first.localPort).close() }
