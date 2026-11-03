@@ -6,4 +6,5 @@ if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]
 fi
 (cd ../server && cargo build --release --locked)
 export PORTSIDE_TEST_SERVER="$(cd ../server && pwd)/target/release/portside-server"
+export PORTSIDE_TEST_TAILSCALE="$(cd ../server && pwd)/tests/fixtures/tailscale.py"
 xcrun swift test

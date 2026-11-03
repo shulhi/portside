@@ -8,13 +8,13 @@
     <key>CFBundleIdentifier</key><string>app.portside.mac</string>
     <key>CFBundleName</key><string>Portside</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.4.0</string>
-    <key>CFBundleVersion</key><string>6</string>
+    <key>CFBundleShortVersionString</key><string>0.5.0</string>
+    <key>CFBundleVersion</key><string>7</string>
     <key>CFBundleIconFile</key><string>Portside</string>
     <key>LSMinimumSystemVersion</key><string>27.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
-    <key>NSLocalNetworkUsageDescription</key><string>Portside connects to your work server and forwards its apps to localhost on this Mac.</string>
+    <key>NSLocalNetworkUsageDescription</key><string>Portside connects to your Tailscale devices and shares selected apps between them.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key><true/>

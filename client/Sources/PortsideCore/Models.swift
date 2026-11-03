@@ -6,20 +6,20 @@ public enum PortsideError: LocalizedError, Sendable {
   case http(Int)
   case protocolMismatch
   case disconnected
-  case keychain(Int32)
 
   public var errorDescription: String? {
     switch self {
     case .invalid(let message): message
-    case .http(401): "The server rejected this token. Update the token in server settings."
-    case .http(403): "The server denied access. Check its allowed ports and access settings."
+    case .http(401): "Update this server to the Tailscale-authenticated Portside version."
+    case .http(403):
+      "This device or app port is not allowed. Check your Tailscale account and the server port policy."
     case .http(502): "The remote app is not listening on this port. Start it on your work server."
-    case .http(503): "The server is busy or shutting down. Try again shortly."
+    case .http(503):
+      "The server could not verify Tailscale identity or is busy. Check Tailscale and retry."
     case .http(504): "Connecting to the remote app timed out."
     case .http(let status): "The server returned HTTP \(status)."
     case .protocolMismatch: "This server uses an incompatible Portside protocol."
     case .disconnected: "The connection closed before the tunnel finished."
-    case .keychain(let status): "Keychain could not access the server token (\(status))."
     }
   }
 }
@@ -155,6 +155,7 @@ public struct ServerInfo: Decodable, Sendable {
   public let name: String
   public let version: String
   public let `protocol`: String
+  public let authentication: String
   public let allowedPorts: [String]
   public let excludedPorts: [UInt16]
   public let maxTunnels: Int

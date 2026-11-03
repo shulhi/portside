@@ -19,7 +19,7 @@ public final class ForwardEngine: ObservableObject {
   private var listeners: [UUID: ForwardListener] = [:]
   public init() {}
 
-  public func start(_ rule: ForwardRule, server: ServerProfile, token: String) async throws {
+  public func start(_ rule: ForwardRule, server: ServerProfile) async throws {
     try rule.validate()
     try server.validate()
     guard rule.serverID == server.id else {
@@ -30,7 +30,7 @@ public final class ForwardEngine: ObservableObject {
       listeners.removeValue(forKey: rule.id)
       previous.stop()
     }
-    let listener = try ForwardListener(rule: rule, server: server, token: token) {
+    let listener = try ForwardListener(rule: rule, server: server) {
       [weak self] snapshot in
       self?.snapshots[rule.id] = snapshot
     }
@@ -57,7 +57,6 @@ private final class ForwardListener {
   private let listener: NWListener
   private let rule: ForwardRule
   private let server: ServerProfile
-  private let token: String
   private let queue = DispatchQueue(label: "app.portside.listener")
   private let changed: (ForwardSnapshot) -> Void
   private var snapshot = ForwardSnapshot()
@@ -66,12 +65,11 @@ private final class ForwardListener {
   private var stopped = false
 
   init(
-    rule: ForwardRule, server: ServerProfile, token: String,
+    rule: ForwardRule, server: ServerProfile,
     changed: @escaping (ForwardSnapshot) -> Void
   ) throws {
     self.rule = rule
     self.server = server
-    self.token = try TokenVault.validate(token)
     self.changed = changed
     let parameters = NWParameters.tcp
     parameters.requiredLocalEndpoint = .hostPort(
@@ -146,7 +144,7 @@ private final class ForwardListener {
     }
     let id = UUID()
     let tunnel = Tunnel(
-      connection: connection, server: server, token: token, rule: rule,
+      connection: connection, server: server, rule: rule,
       traffic: { [weak self] sent, received in
         guard let self, !self.stopped else { return }
         self.snapshot.sentBytes += UInt64(sent)
@@ -173,7 +171,6 @@ private final class Tunnel {
   private let tcp: TCPChannel
   private let websocket = WebSocketChannel()
   private let server: ServerProfile
-  private let token: String
   private let rule: ForwardRule
   private let traffic: (Int, Int) -> Void
   private let finished: ((any Error)?) -> Void
@@ -184,12 +181,11 @@ private final class Tunnel {
   private var receivedEOF = false
 
   init(
-    connection: NWConnection, server: ServerProfile, token: String, rule: ForwardRule,
+    connection: NWConnection, server: ServerProfile, rule: ForwardRule,
     traffic: @escaping (Int, Int) -> Void, finished: @escaping ((any Error)?) -> Void
   ) {
     tcp = TCPChannel(connection)
     self.server = server
-    self.token = token
     self.rule = rule
     self.traffic = traffic
     self.finished = finished
@@ -206,7 +202,7 @@ private final class Tunnel {
         try Task.checkCancellation()
         try await tcp.start()
         try Task.checkCancellation()
-        try await websocket.connect(profile: server, token: token, rule: rule)
+        try await websocket.connect(profile: server, rule: rule)
         try Task.checkCancellation()
         try await withThrowingTaskGroup(of: Void.self) { group in
           group.addTask { [self] in try await self.upload() }

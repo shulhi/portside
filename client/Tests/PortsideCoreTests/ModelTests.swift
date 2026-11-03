@@ -51,14 +51,6 @@ final class ModelTests: XCTestCase {
       "ws://work-laptop:9417/v1/tunnels/5173?family=ipv6")
   }
 
-  func testTokenValidation() throws {
-    XCTAssertEqual(
-      try TokenVault.validate(" \n" + String(repeating: "a", count: 64) + "\n"),
-      String(repeating: "a", count: 64))
-    XCTAssertThrowsError(try TokenVault.validate("short"))
-    XCTAssertThrowsError(try TokenVault.validate(String(repeating: "z", count: 64)))
-  }
-
   func testBinaryFrameLimitsAndEOF() throws {
     let binary = Data((0...255).map(UInt8.init))
     XCTAssertEqual(try TunnelFrame(decoding: TunnelFrame.data(binary).encoded()), .data(binary))
@@ -72,7 +64,7 @@ final class ModelTests: XCTestCase {
 
   func testServerPortPolicyHonorsExclusions() throws {
     let json = """
-      {"name":"portside-server","version":"0.1.0","protocol":"portside.tcp.v1","allowed_ports":["3000","8000-8100","9417"],"excluded_ports":[9417],"max_tunnels":128,"active_tunnels":0,"max_data_size":65536}
+      {"name":"portside-server","version":"0.1.0","protocol":"portside.tcp.v1","authentication":"tailscale-owner","allowed_ports":["3000","8000-8100","9417"],"excluded_ports":[9417],"max_tunnels":128,"active_tunnels":0,"max_data_size":65536}
       """
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase

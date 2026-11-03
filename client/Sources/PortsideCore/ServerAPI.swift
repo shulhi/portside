@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ServerAPI {
-  public static func info(for profile: ServerProfile, token: String) async throws -> ServerInfo {
+  public static func info(for profile: ServerProfile) async throws -> ServerInfo {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 8
     configuration.timeoutIntervalForResource = 10
@@ -9,16 +9,15 @@ public enum ServerAPI {
     configuration.urlCache = nil
     let session = URLSession(configuration: configuration)
     defer { session.invalidateAndCancel() }
-    var request = URLRequest(url: try profile.url(path: "/v1/info"))
-    request.setValue(
-      "Bearer \(try TokenVault.validate(token))", forHTTPHeaderField: "Authorization")
+    let request = URLRequest(url: try profile.url(path: "/v1/info"))
     let (data, response) = try await session.data(for: request)
     guard let response = response as? HTTPURLResponse else { throw PortsideError.disconnected }
     guard response.statusCode == 200 else { throw PortsideError.http(response.statusCode) }
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
     let info = try decoder.decode(ServerInfo.self, from: data)
-    guard info.protocol == TunnelFrame.subprotocol, info.maxDataSize == TunnelFrame.maximumDataSize
+    guard info.authentication == "tailscale-owner", info.protocol == TunnelFrame.subprotocol,
+      info.maxDataSize == TunnelFrame.maximumDataSize
     else {
       throw PortsideError.protocolMismatch
     }

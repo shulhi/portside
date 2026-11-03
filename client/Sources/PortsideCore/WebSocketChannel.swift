@@ -9,12 +9,10 @@ final class WebSocketChannel: NSObject, URLSessionWebSocketDelegate {
   private var deadline: Task<Void, Never>?
   private var closed = false
 
-  func connect(profile: ServerProfile, token: String, rule: ForwardRule) async throws {
+  func connect(profile: ServerProfile, rule: ForwardRule) async throws {
     var request = URLRequest(
       url: try profile.url(
         path: "/v1/tunnels/\(rule.remotePort)", websocket: true, family: rule.family))
-    request.setValue(
-      "Bearer \(try TokenVault.validate(token))", forHTTPHeaderField: "Authorization")
     request.setValue(TunnelFrame.subprotocol, forHTTPHeaderField: "Sec-WebSocket-Protocol")
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 8

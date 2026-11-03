@@ -12,23 +12,23 @@ final class IntegrationTests: XCTestCase {
     defer { server.stop() }
     var profile = server.profile
     profile.uploadFolder = "project/screenshots"
-    let info = try await ServerAPI.info(for: profile, token: RustServer.token)
+    let info = try await ServerAPI.info(for: profile)
     let settings = try XCTUnwrap(info.uploads)
     let file = server.directory.appendingPathComponent("data & preview.bin")
     let bytes = Data((0..<3 * 1024 * 1024).map { UInt8($0 % 251) })
     try bytes.write(to: file)
     let result = try await FileUploadAPI.upload(
-      .file(file), to: profile, token: RustServer.token, settings: settings)
+      .file(file), to: profile, settings: settings)
     XCTAssertEqual(result.bytes, Int64(bytes.count))
     XCTAssertEqual(result.name, "data & preview.bin")
     XCTAssertTrue(result.path.hasPrefix(settings.directory + "/project/screenshots/"))
     XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: result.path)), bytes)
     let imageBytes = Data([137, 80, 78, 71, 13, 10, 26, 10, 0, 255])
     let first = try await FileUploadAPI.upload(
-      .image(name: "clipboard.png", data: imageBytes), to: profile, token: RustServer.token,
+      .image(name: "clipboard.png", data: imageBytes), to: profile,
       settings: settings)
     let second = try await FileUploadAPI.upload(
-      .image(name: "clipboard.png", data: imageBytes), to: profile, token: RustServer.token,
+      .image(name: "clipboard.png", data: imageBytes), to: profile,
       settings: settings)
     XCTAssertNotEqual(first.path, second.path)
     XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: first.path)), imageBytes)
@@ -37,12 +37,12 @@ final class IntegrationTests: XCTestCase {
   func testClientRejectsOversizedUploadsBeforeSending() async throws {
     let server = try await RustServer.start(maxUploadBytes: 128)
     defer { server.stop() }
-    let info = try await ServerAPI.info(for: server.profile, token: RustServer.token)
+    let info = try await ServerAPI.info(for: server.profile)
     let settings = try XCTUnwrap(info.uploads)
     do {
       _ = try await FileUploadAPI.upload(
         .image(name: "large.png", data: Data(repeating: 7, count: 256)), to: server.profile,
-        token: RustServer.token, settings: settings)
+        settings: settings)
       XCTFail("Oversized upload should fail")
     } catch { XCTAssertTrue(error.localizedDescription.contains("size limit")) }
     XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: settings.directory).isEmpty)
@@ -60,7 +60,7 @@ final class IntegrationTests: XCTestCase {
     let rule = ForwardRule(
       serverID: server.profile.id, name: "Disconnect", localPort: try unusedPort(),
       remotePort: target.port)
-    try await engine.start(rule, server: server.profile, token: RustServer.token)
+    try await engine.start(rule, server: server.profile)
     let client = TCPChannel(
       NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: rule.localPort)!, using: .tcp)
     )
@@ -78,15 +78,22 @@ final class IntegrationTests: XCTestCase {
     XCTAssertNotNil(engine.snapshots[rule.id]?.error)
   }
 
-  func testAuthenticatedAPIAndInvalidToken() async throws {
+  func testTailscaleIdentityRequiredForAPI() async throws {
     let server = try await RustServer.start()
     defer { server.stop() }
-    let info = try await ServerAPI.info(for: server.profile, token: RustServer.token)
-    XCTAssertEqual(info.protocol, TunnelFrame.subprotocol)
+    let info = try await ServerAPI.info(for: server.profile)
+    XCTAssertEqual(info.authentication, "tailscale-owner")
+    let peer = server.directory.appendingPathComponent("tailscale.peer")
+    try Data("8".utf8).write(to: peer)
     do {
-      _ = try await ServerAPI.info(for: server.profile, token: String(repeating: "b", count: 64))
-      XCTFail("Invalid credentials must be rejected")
-    } catch PortsideError.http(401) {} catch { throw error }
+      _ = try await ServerAPI.info(for: server.profile)
+      XCTFail("Another Tailscale user's device must be rejected")
+    } catch PortsideError.http(403) {} catch { throw error }
+    try Data("unavailable".utf8).write(to: peer)
+    do {
+      _ = try await ServerAPI.info(for: server.profile)
+      XCTFail("An unavailable identity lookup must fail closed")
+    } catch PortsideError.http(503) {} catch { throw error }
   }
 
   func testDynamicForwardsAreIndependentAndTransferBinary() async throws {
@@ -106,7 +113,7 @@ final class IntegrationTests: XCTestCase {
     let second = ForwardRule(
       serverID: server.profile.id, name: "Second", localPort: try unusedPort(),
       remotePort: secondTarget.port)
-    try await engine.start(first, server: server.profile, token: RustServer.token)
+    try await engine.start(first, server: server.profile)
     let a = TCPChannel(
       NWConnection(
         host: "127.0.0.1", port: NWEndpoint.Port(rawValue: first.localPort)!, using: .tcp))
@@ -115,7 +122,7 @@ final class IntegrationTests: XCTestCase {
     let firstReply = try await a.receive()
     XCTAssertEqual(firstReply.data, Data("first".utf8))
 
-    try await engine.start(second, server: server.profile, token: RustServer.token)
+    try await engine.start(second, server: server.profile)
     let b = TCPChannel(
       NWConnection(
         host: "127.0.0.1", port: NWEndpoint.Port(rawValue: second.localPort)!, using: .tcp))
@@ -157,7 +164,7 @@ final class IntegrationTests: XCTestCase {
     let rule = ForwardRule(
       serverID: server.profile.id, name: "HTTP", localPort: try unusedPort(),
       remotePort: target.port)
-    try await engine.start(rule, server: server.profile, token: RustServer.token)
+    try await engine.start(rule, server: server.profile)
     let client = TCPChannel(
       NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: rule.localPort)!, using: .tcp)
     )
@@ -188,7 +195,7 @@ final class IntegrationTests: XCTestCase {
     let rule = ForwardRule(
       serverID: server.profile.id, name: "Half close", localPort: try unusedPort(),
       remotePort: target.port)
-    try await engine.start(rule, server: server.profile, token: RustServer.token)
+    try await engine.start(rule, server: server.profile)
     let client = TCPChannel(
       NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: rule.localPort)!, using: .tcp)
     )
@@ -225,9 +232,9 @@ final class IntegrationTests: XCTestCase {
     let second = ForwardRule(
       serverID: server.profile.id, name: "Conflict", localPort: first.localPort,
       remotePort: target.port)
-    try await engine.start(first, server: server.profile, token: RustServer.token)
+    try await engine.start(first, server: server.profile)
     do {
-      try await engine.start(second, server: server.profile, token: RustServer.token)
+      try await engine.start(second, server: server.profile)
       XCTFail("Port conflict must fail")
     } catch { XCTAssertEqual(engine.snapshots[second.id]?.phase, .failed) }
     XCTAssertEqual(engine.snapshots[first.id]?.phase, .listening)
@@ -243,7 +250,7 @@ final class IntegrationTests: XCTestCase {
     let rule = ForwardRule(
       serverID: server.profile.id, name: "Unavailable", localPort: try unusedPort(),
       remotePort: try unusedPort())
-    try await engine.start(rule, server: server.profile, token: RustServer.token)
+    try await engine.start(rule, server: server.profile)
     let client = TCPChannel(
       NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: rule.localPort)!, using: .tcp)
     )
@@ -260,7 +267,6 @@ final class IntegrationTests: XCTestCase {
 
 @MainActor
 private final class RustServer {
-  static let token = String(repeating: "a", count: 64)
   let profile: ServerProfile
   let process: Process
   let directory: URL
@@ -279,13 +285,16 @@ private final class RustServer {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "portside-e2e-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let tokenFile = directory.appendingPathComponent("test.token")
-    FileManager.default.createFile(
-      atPath: tokenFile.path, contents: Data(token.utf8), attributes: [.posixPermissions: 0o600])
+    guard let identityFixture = ProcessInfo.processInfo.environment["PORTSIDE_TEST_TAILSCALE"]
+    else {
+      throw XCTSkip("Set PORTSIDE_TEST_TAILSCALE to the test identity fixture.")
+    }
+    let identity = directory.appendingPathComponent("tailscale.py")
+    try FileManager.default.copyItem(at: URL(fileURLWithPath: identityFixture), to: identity)
     let process = Process()
     process.executableURL = URL(fileURLWithPath: binary)
     process.arguments = [
-      "serve", "--listen", "127.0.0.1:\(port)", "--token-file", tokenFile.path,
+      "serve", "--listen", "127.0.0.1:\(port)", "--tailscale-bin", identity.path,
       "--upload-dir", directory.appendingPathComponent("uploads").path, "--max-upload-bytes",
       String(maxUploadBytes),
     ]
@@ -298,7 +307,7 @@ private final class RustServer {
       try process.run()
       for _ in 0..<30 {
         do {
-          _ = try await ServerAPI.info(for: server.profile, token: token)
+          _ = try await ServerAPI.info(for: server.profile)
           return server
         } catch { try await Task.sleep(for: .milliseconds(50)) }
       }

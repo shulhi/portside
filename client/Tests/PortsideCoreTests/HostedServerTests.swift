@@ -22,11 +22,12 @@ final class HostedServerTests: XCTestCase {
         .validate())
   }
 
-  func testHostedServerCreatesPrivateCredentialsPersistsSettingsAndStops() async throws {
+  func testHostedServerUsesTailscaleIdentityPersistsSettingsAndStops() async throws {
     let binary = try executable()
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "portside-host-\(UUID().uuidString)")
-    let host = HostedServer(directory: directory, executableURL: binary)
+    let host = HostedServer(
+      directory: directory, executableURL: binary, tailscaleURL: try identityFixture())
     defer {
       host.stop()
       try? FileManager.default.removeItem(at: directory)
@@ -37,30 +38,25 @@ final class HostedServerTests: XCTestCase {
       address: "127.0.0.1", port: port, allowedPorts: "3000,5173,8080")
     try await host.start(config)
     XCTAssertEqual(host.phase, .running)
-    let token = try host.token()
-    XCTAssertEqual(token.count, 64)
-    let permissions =
-      try FileManager.default.attributesOfItem(atPath: host.tokenURL.path)[.posixPermissions]
-      as? NSNumber
-    XCTAssertEqual(permissions?.intValue, 0o600)
+    XCTAssertFalse(
+      FileManager.default.fileExists(atPath: directory.appendingPathComponent("server.token").path))
     let directoryPermissions =
       try FileManager.default.attributesOfItem(atPath: directory.path)[.posixPermissions]
       as? NSNumber
     XCTAssertEqual(directoryPermissions?.intValue, 0o700)
     let profile = ServerProfile(name: "Hosted", host: config.address, port: port)
-    let info = try await ServerAPI.info(for: profile, token: token)
+    let info = try await ServerAPI.info(for: profile)
     XCTAssertTrue(info.allows(3000))
     XCTAssertFalse(info.allows(5432))
     XCTAssertNil(info.uploads)
     host.stop()
     try await awaitStopped(host)
-    let reloaded = HostedServer(directory: directory, executableURL: binary)
+    let reloaded = HostedServer(
+      directory: directory, executableURL: binary, tailscaleURL: try identityFixture())
     defer { reloaded.stop() }
     XCTAssertEqual(reloaded.configuration, config)
-    XCTAssertEqual(try reloaded.token(), token)
     try await reloaded.start(config)
     XCTAssertEqual(reloaded.phase, .running)
-    XCTAssertEqual(try reloaded.token(), token)
     reloaded.stop()
     try await awaitStopped(reloaded)
   }
@@ -69,7 +65,8 @@ final class HostedServerTests: XCTestCase {
     let binary = try executable()
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "portside-host-failure-\(UUID().uuidString)")
-    let host = HostedServer(directory: directory, executableURL: binary)
+    let host = HostedServer(
+      directory: directory, executableURL: binary, tailscaleURL: try identityFixture())
     let (listener, port) = try listeningSocket()
     defer {
       close(listener)
@@ -83,6 +80,13 @@ final class HostedServerTests: XCTestCase {
     XCTAssertEqual(host.phase, .failed)
     XCTAssertNotNil(host.errorMessage)
     XCTAssertGreaterThanOrEqual(fcntl(listener, F_GETFD), 0)
+  }
+
+  private func identityFixture() throws -> URL {
+    guard let path = ProcessInfo.processInfo.environment["PORTSIDE_TEST_TAILSCALE"] else {
+      throw XCTSkip("Run scripts/test.sh to use the isolated Tailscale identity fixture.")
+    }
+    return URL(fileURLWithPath: path)
   }
 
   private func executable() throws -> URL {

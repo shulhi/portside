@@ -30,7 +30,6 @@ final class FileTransferManager: ObservableObject {
   private var worker: Task<Void, Never>?
   private var closing = false
   private var generations: [UUID: UInt64] = [:]
-  private let vault = TokenVault()
 
   func enqueue(_ inputs: [FileUploadSource], server: ServerProfile) {
     guard !closing else { return }
@@ -145,13 +144,12 @@ final class FileTransferManager: ObservableObject {
         current = item
         update(item.id) { $0.phase = .uploading }
         do {
-          let token = try vault.load(for: item.server.id)
-          let info = try await ServerAPI.info(for: item.server, token: token)
+          let info = try await ServerAPI.info(for: item.server)
           guard let settings = info.uploads else {
             throw PortsideError.invalid("Enable --upload-dir on the server to receive files.")
           }
           let result = try await FileUploadAPI.upload(
-            item.source, to: item.server, token: token, settings: settings
+            item.source, to: item.server, settings: settings
           ) { [weak self] progress in
             Task { @MainActor in self?.update(item.id) { $0.progress = progress } }
           }

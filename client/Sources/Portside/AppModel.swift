@@ -37,7 +37,6 @@ final class AppModel: ObservableObject {
   let transfers = FileTransferManager()
   let hostedServer = HostedServer()
   private let store = ConfigurationStore()
-  private let vault = TokenVault()
   private var observation: AnyCancellable?
   private var canSave = false
   private var restored = false
@@ -65,26 +64,15 @@ final class AppModel: ObservableObject {
 
   func snapshot(_ rule: ForwardRule) -> ForwardSnapshot { snapshots[rule.id] ?? ForwardSnapshot() }
 
-  func saveServer(_ profile: ServerProfile, token: String) throws {
+  func saveServer(_ profile: ServerProfile) throws {
     try profile.validate()
-    let oldToken = try? vault.load(for: profile.id)
-    let replacement = token.trimmingCharacters(in: .whitespacesAndNewlines)
-    let credential = try TokenVault.validate(replacement.isEmpty ? (oldToken ?? "") : replacement)
     var next = configuration
     if let index = next.servers.firstIndex(where: { $0.id == profile.id }) {
       next.servers[index] = profile
     } else {
       next.servers.append(profile)
     }
-    try vault.save(credential, for: profile.id)
-    do { try persist(next) } catch {
-      if let oldToken {
-        try? vault.save(oldToken, for: profile.id)
-      } else {
-        try? vault.delete(for: profile.id)
-      }
-      throw error
-    }
+    try persist(next)
     for rule in configuration.forwards where rule.serverID == profile.id { stop(rule) }
     transfers.cancel(serverID: profile.id)
     configuration = next
@@ -103,10 +91,7 @@ final class AppModel: ObservableObject {
       serverStates.removeValue(forKey: server.id)
       transfers.cancel(serverID: server.id)
       selectedServerID = next.servers.first?.id
-      do { try vault.delete(for: server.id) } catch {
-        errorMessage =
-          "The server was removed, but its old Keychain token could not be deleted: \(error.localizedDescription)"
-      }
+
     } catch { errorMessage = error.localizedDescription }
   }
 
@@ -149,7 +134,7 @@ final class AppModel: ObservableObject {
     guard serverStates[server.id]?.isChecking != true else { return }
     serverStates[server.id] = .checking
     do {
-      let info = try await ServerAPI.info(for: server, token: vault.load(for: server.id))
+      let info = try await ServerAPI.info(for: server)
       guard servers.contains(server) else { return }
       serverStates[server.id] = .ready(info)
     } catch {
@@ -172,8 +157,7 @@ final class AppModel: ObservableObject {
       }
     }
     do {
-      let token = try vault.load(for: server.id)
-      let info = try await ServerAPI.info(for: server, token: token)
+      let info = try await ServerAPI.info(for: server)
       guard startRequests[rule.id] == requestID, configuration.forwards.contains(rule),
         servers.contains(server)
       else { return }
@@ -183,7 +167,7 @@ final class AppModel: ObservableObject {
           "Remote port \(rule.remotePort) is not allowed by this server. Update its --allowed-ports setting or choose another port."
         )
       }
-      try await engine.start(rule, server: server, token: token)
+      try await engine.start(rule, server: server)
     } catch {
       guard startRequests[rule.id] == requestID else { return }
       errorMessage = "Could not start \(rule.name): \(error.localizedDescription)"

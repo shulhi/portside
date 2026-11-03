@@ -87,17 +87,16 @@ public final class HostedServer: ObservableObject {
   @Published public private(set) var configuration = HostedServerConfiguration()
   @Published public private(set) var errorMessage: String?
   public let directory: URL
-  public var tokenURL: URL { directory.appendingPathComponent("server.token") }
   private var settingsURL: URL { directory.appendingPathComponent("configuration.json") }
   private var logURL: URL { directory.appendingPathComponent("server.log") }
   private let executableURL: URL
+  private let tailscaleURL: URL
   private var process: Process?
-  private var generator: Process?
   private var parentPipe: Pipe?
   private var operation: UUID?
   private var canSave = true
 
-  public init(directory: URL? = nil, executableURL: URL? = nil) {
+  public init(directory: URL? = nil, executableURL: URL? = nil, tailscaleURL: URL? = nil) {
     self.directory =
       directory
       ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -105,6 +104,15 @@ public final class HostedServer: ObservableObject {
     self.executableURL =
       executableURL
       ?? Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/portside-server")
+    self.tailscaleURL =
+      tailscaleURL ?? [
+        "/usr/local/bin/tailscale", "/opt/homebrew/bin/tailscale",
+        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+      ]
+      .map { URL(fileURLWithPath: $0) }.first {
+        FileManager.default.isExecutableFile(atPath: $0.path)
+      }
+      ?? URL(fileURLWithPath: "/usr/local/bin/tailscale")
     do {
       if FileManager.default.fileExists(atPath: settingsURL.path) {
         configuration = try JSONDecoder().decode(
@@ -115,10 +123,6 @@ public final class HostedServer: ObservableObject {
       errorMessage =
         "Hosting settings could not be read. The existing file has been preserved: \(settingsURL.path)"
     }
-  }
-
-  public func token() throws -> String {
-    try TokenVault.validate(String(contentsOf: tokenURL, encoding: .utf8))
   }
 
   public func start(_ settings: HostedServerConfiguration) async throws {
@@ -146,30 +150,16 @@ public final class HostedServer: ObservableObject {
         atPath: logURL.path, contents: Data(), attributes: [.posixPermissions: 0o600])
       let output = try FileHandle(forWritingTo: logURL)
       defer { try? output.close() }
-      if !FileManager.default.fileExists(atPath: tokenURL.path) {
-        let child = Process()
-        child.executableURL = executableURL
-        child.environment = ["RUST_LOG": "info"]
-        child.arguments = ["generate-token", "--output", tokenURL.path]
-        child.standardOutput = output
-        child.standardError = output
-        generator = child
-        try child.run()
-        while child.isRunning {
-          try await Task.sleep(for: .milliseconds(20))
-          guard operation == request else { return }
-        }
-        generator = nil
-        guard child.terminationStatus == 0 else { throw PortsideError.invalid(failureLog()) }
-      }
       guard operation == request else { return }
-      let credential = try token()
       let child = Process()
       let pipe = Pipe()
       child.executableURL = executableURL
-      child.environment = ["RUST_LOG": "info"]
+      child.environment = [
+        "RUST_LOG": "info", "HOME": NSHomeDirectory(),
+        "PATH": "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin",
+      ]
       child.arguments = [
-        "serve", "--listen", settings.endpoint, "--token-file", tokenURL.path,
+        "serve", "--listen", settings.endpoint, "--tailscale-bin", tailscaleURL.path,
         "--allowed-ports", settings.allowedPorts, "--shutdown-on-stdin-eof",
       ]
       child.standardInput = pipe
@@ -195,13 +185,13 @@ public final class HostedServer: ObservableObject {
       while operation == request, child.isRunning, ContinuousClock.now < deadline {
         do {
           var health = URLRequest(url: try profile.url(path: "/v1/info"))
-          health.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization")
           let (data, response) = try await session.data(for: health)
           if (response as? HTTPURLResponse)?.statusCode == 200 {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let info = try decoder.decode(ServerInfo.self, from: data)
-            guard info.protocol == TunnelFrame.subprotocol else {
+            guard info.authentication == "tailscale-owner", info.protocol == TunnelFrame.subprotocol
+            else {
               throw PortsideError.protocolMismatch
             }
             guard operation == request, child.isRunning else { return }
@@ -222,8 +212,6 @@ public final class HostedServer: ObservableObject {
       operation = nil
       try? parentPipe?.fileHandleForWriting.close()
       parentPipe = nil
-      if generator?.isRunning == true { generator?.terminate() }
-      generator = nil
       if process?.isRunning == true { process?.terminate() }
       process = nil
       phase = .failed
@@ -234,8 +222,6 @@ public final class HostedServer: ObservableObject {
 
   public func stop() {
     operation = nil
-    if generator?.isRunning == true { generator?.terminate() }
-    generator = nil
     try? parentPipe?.fileHandleForWriting.close()
     parentPipe = nil
     phase = process?.isRunning == true ? .stopping : .stopped

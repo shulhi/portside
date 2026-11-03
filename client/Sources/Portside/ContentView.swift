@@ -70,7 +70,7 @@ struct ContentView: View {
         deletingServer = nil
       }
     } message: {
-      Text("This also removes its saved forwards and Keychain token.")
+      Text("This also removes its saved forwards.")
     }
   }
 
@@ -136,7 +136,7 @@ struct ContentView: View {
         Spacer()
         Text(
           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.4.0"
+            ?? "0.5.0"
         )
         .foregroundStyle(.tertiary)
       }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)

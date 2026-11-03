@@ -45,7 +45,7 @@ public enum FileUploadSource: Sendable {
 
 public enum FileUploadAPI {
   public static func upload(
-    _ source: FileUploadSource, to server: ServerProfile, token: String,
+    _ source: FileUploadSource, to server: ServerProfile,
     settings: UploadSettings, progress: @escaping @Sendable (Double) -> Void = { _ in }
   ) async throws -> UploadedFile {
     try server.validate()
@@ -61,8 +61,6 @@ public enum FileUploadAPI {
     var request = URLRequest(url: url)
     request.httpMethod = "PUT"
     request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-    request.setValue(
-      "Bearer \(try TokenVault.validate(token))", forHTTPHeaderField: "Authorization")
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 60
     configuration.timeoutIntervalForResource = 600

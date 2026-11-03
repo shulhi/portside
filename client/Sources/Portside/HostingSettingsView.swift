@@ -116,16 +116,11 @@ struct HostingSettingsView: View {
             Text(verbatim: host.configuration.endpoint).font(.system(size: 13, design: .monospaced))
               .textSelection(.enabled)
             Text(
-              "In Portside on your phone, add this Mac using its IP, server port, and token. Keep Tailscale connected on both devices."
+              "In Portside on your phone, add this Mac using its IP and server port. Access is limited to devices on your Tailscale account. Keep Tailscale connected on both devices."
             )
             .font(.system(size: 11)).foregroundStyle(.secondary)
             HStack {
               Button("Copy address") { copy(host.configuration.address, label: "Address copied") }
-              Button("Copy token") {
-                do { copy(try host.token(), label: "Token copied", concealed: true) } catch {
-                  message = error.localizedDescription
-                }
-              }
               if let copied { Text(copied).font(.system(size: 11)).foregroundStyle(.secondary) }
             }.controlSize(.small)
           }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
@@ -162,13 +157,9 @@ struct HostingSettingsView: View {
     }
   }
 
-  private func copy(_ value: String, label: String, concealed: Bool = false) {
+  private func copy(_ value: String, label: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(value, forType: .string)
-    if concealed {
-      NSPasteboard.general.setData(
-        Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-    }
     copied = label
   }
 }

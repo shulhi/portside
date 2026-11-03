@@ -8,7 +8,6 @@ struct ServerEditor: View {
   @State private var name = ""
   @State private var host = ""
   @State private var port = "9417"
-  @State private var token = ""
   @State private var error: String?
 
   var body: some View {
@@ -21,14 +20,12 @@ struct ServerEditor: View {
         TextField("Tailscale host", text: $host, prompt: Text("work-laptop or 100.x.y.z"))
           .autocorrectionDisabled()
         TextField("Server port", text: $port).monospacedDigit()
-        SecureField(
-          existing == nil ? "Server token" : "Replacement token", text: $token,
-          prompt: Text(
-            existing == nil ? "Paste your server token" : "Leave blank to keep current token"))
-      }.formStyle(.grouped).scrollDisabled(true).frame(height: 204)
-      Label("Tokens are stored in your Mac's Keychain.", systemImage: "key.horizontal").font(
-        .system(size: 11)
-      ).foregroundStyle(.secondary)
+      }.formStyle(.grouped).scrollDisabled(true).frame(height: 158)
+      Label(
+        "Access uses your existing Tailscale identity.",
+        systemImage: "person.crop.circle.badge.checkmark"
+      )
+      .font(.system(size: 11)).foregroundStyle(.secondary)
       if existing != nil {
         Text("Saving changes stops this server's forwards and file transfers.").font(
           .system(size: 11)
@@ -65,7 +62,7 @@ struct ServerEditor: View {
       let profile = ServerProfile(
         id: existing?.id ?? UUID(), name: name, host: host, port: port,
         uploadFolder: existing?.uploadFolder ?? "")
-      try model.saveServer(profile, token: token)
+      try model.saveServer(profile)
       dismiss()
       Task { await model.check(profile) }
     } catch { self.error = error.localizedDescription }
