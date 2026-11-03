@@ -37,7 +37,7 @@ import androidx.lifecycle.lifecycleScope
 import app.portside.core.*
 import kotlinx.coroutines.*
 
-private val Teal = Color(0xFF197B66)
+private val Blue = Color(0xFF1462D2)
 
 class MainActivity : ComponentActivity() {
     private val app get() = application as PortsideApplication
@@ -54,8 +54,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = Color(0xFF82D6BC), secondary = Color(0xFFB3CCBF))
-                else lightColorScheme(primary = Teal, secondary = Color(0xFF4D635A), surface = Color(0xFFF8FAF8))) {
+            MaterialTheme(colorScheme = if (dark) darkColorScheme(
+                    primary = Color(0xFFADC6FF), onPrimary = Color(0xFF002F68),
+                    primaryContainer = Color(0xFF164B92), onPrimaryContainer = Color(0xFFD8E6FF),
+                    secondary = Color(0xFFBDC7D8), secondaryContainer = Color(0xFF354052),
+                    surface = Color(0xFF111318), background = Color(0xFF111318),
+                    surfaceContainer = Color(0xFF1D2027), surfaceContainerLow = Color(0xFF191C22))
+                else lightColorScheme(
+                    primary = Blue, onPrimary = Color.White,
+                    primaryContainer = Color(0xFFD8E6FF), onPrimaryContainer = Color(0xFF001B3E),
+                    secondary = Color(0xFF566172), secondaryContainer = Color(0xFFE1E7F0),
+                    surface = Color(0xFFFAFBFE), background = Color(0xFFFAFBFE),
+                    surfaceContainer = Color(0xFFF0F3F8), surfaceContainerLow = Color(0xFFF3F5FA))) {
                 val state by app.state.collectAsStateWithLifecycle()
                 PortsideScreen(state, app,
                     onCheck = { server -> networkAction(false) { check(server) } },
@@ -139,15 +149,11 @@ private fun PortsideScreen(
         },
     ) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(insets).widthIn(max = 760.dp),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 104.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item {
-                Text("Your remote apps. On this phone.", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (server == null) {
                 item {
-                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Icon(painterResource(R.drawable.ic_server), null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
                             Text("Connect your work server", style = MaterialTheme.typography.titleLarge)
@@ -159,11 +165,11 @@ private fun PortsideScreen(
             } else {
                 item {
                     val status = state.serverStatuses[server.id] ?: ServerStatus()
-                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(painterResource(R.drawable.ic_server), null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(12.dp))
+                                Spacer(Modifier.width(8.dp))
                                 Box(Modifier.weight(1f)) {
                                     TextButton(onClick = { serverMenu = true }, contentPadding = PaddingValues(0.dp)) {
                                         Text(server.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
@@ -192,7 +198,7 @@ private fun PortsideScreen(
                     }
                 }
                 item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Port forwards", style = MaterialTheme.typography.titleMedium)
                         Text("$active active · $connections connections", style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -241,40 +247,52 @@ private fun ForwardCard(rule: ForwardRule, snapshot: ForwardSnapshot, onStart: (
     var menu by remember { mutableStateOf(false) }
     val listening = snapshot.phase == Phase.LISTENING
     val starting = snapshot.phase == Phase.STARTING
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val status = when (snapshot.phase) {
+        Phase.LISTENING -> "Listening · ${snapshot.connections} connections"
+        Phase.STARTING -> "Starting…"
+        Phase.FAILED -> "Failed"
+        Phase.STOPPED -> "Stopped"
+    }
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(rule.name, style = MaterialTheme.typography.titleMedium)
-                    Text(when (snapshot.phase) {
-                        Phase.LISTENING -> "Listening · ${snapshot.connections} connections"
-                        Phase.STARTING -> "Starting…"
-                        Phase.FAILED -> "Failed"
-                        Phase.STOPPED -> "Stopped"
-                    }, style = MaterialTheme.typography.labelSmall,
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(rule.name, style = MaterialTheme.typography.titleSmall, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("${rule.localPort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${rule.remotePort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(status, style = MaterialTheme.typography.labelSmall, maxLines = 1,
                         color = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = onOpen, enabled = listening) { Icon(painterResource(R.drawable.ic_browser), "Open ${rule.name} in browser") }
+                IconButton(onClick = onOpen, enabled = listening) {
+                    Icon(painterResource(R.drawable.ic_browser), "Open ${rule.name} in browser", Modifier.size(20.dp))
+                }
+                FilledTonalIconButton(onClick = if (listening || starting) onStop else onStart) {
+                    if (starting) {
+                        Icon(Icons.Rounded.Close, "Cancel ${rule.name}", Modifier.size(20.dp))
+                    } else if (listening) {
+                        Icon(painterResource(R.drawable.ic_stop), "Stop ${rule.name}", Modifier.size(20.dp))
+                    } else {
+                        Icon(Icons.Rounded.PlayArrow, "Start ${rule.name}", Modifier.size(20.dp))
+                    }
+                }
                 Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for ${rule.name}") }
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for ${rule.name}", Modifier.size(20.dp)) }
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem(text = { Text("Edit forward") }, onClick = { menu = false; onEdit() })
                         DropdownMenuItem(text = { Text("Remove forward") }, onClick = { menu = false; onRemove() })
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${rule.localPort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(16.dp))
-                Text("${rule.remotePort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = if (listening || starting) onStop else onStart, contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)) {
-                    Text(if (starting) "Cancel" else if (listening) "Stop" else "Start")
-                }
+            snapshot.error?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(end = 8.dp, top = 4.dp, bottom = 4.dp))
             }
-            snapshot.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         }
     }
 }

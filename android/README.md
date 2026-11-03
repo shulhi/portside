@@ -4,6 +4,11 @@ A native Kotlin / Jetpack Compose port-forwarding client. Requires Android 16
 (API 36) or later, targets Android 17 (API 37), and uses the same Rust server as
 the Mac app. It uses the phone's existing Tailscale VPN; it creates no second VPN.
 
+Version 0.3 uses the same blue accent as the Mac app, with native Material controls,
+compact forward rows, and light/dark appearance. Each row has browser, start/stop,
+and more-actions controls with standard touch targets. Background forwarding stays
+in the existing foreground service and notification.
+
 ## Build and install
 
 Install Android Studio, SDK Platform 37, Build Tools 36.0.0 and a JDK supported by
@@ -89,3 +94,10 @@ one forward while another remains usable. A disposable host Rust server and HTTP
 target are connected by a temporary `adb reverse` mapping; test profiles, mapping
 and processes are cleaned up afterward. The script selects the single connected
 emulator unless `ANDROID_SERIAL` is explicitly set. Use an Android 17 test emulator.
+
+`LiveConnectionTest` is an opt-in API probe for a connected physical phone. Pass
+`portsideHost` (and optionally `portsideIp`) to the instrumentation runner with
+class `app.portside.android.LiveConnectionTest`. It checks the actual app's DNS,
+VPN routing, and Tailscale authentication without editing profiles or starting
+forwards. Instrumentation restarts the app, so stop active phone forwards first.
+The probe is skipped when no host argument is supplied.
