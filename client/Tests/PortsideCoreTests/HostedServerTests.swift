@@ -61,6 +61,56 @@ final class HostedServerTests: XCTestCase {
     try await awaitStopped(reloaded)
   }
 
+  func testLegacyHostingSettingsKeepUploadsDisabledAndPathsAreValidated() throws {
+    let json = Data(#"{"address":"127.0.0.1","port":9417,"allowedPorts":"3000"}"#.utf8)
+    let old = try JSONDecoder().decode(HostedServerConfiguration.self, from: json)
+    XCTAssertNil(old.uploadDirectory)
+    for path in ["", "relative/uploads", "~/uploads", "/tmp/bad\nfolder"] {
+      XCTAssertThrowsError(
+        try HostedServerConfiguration(address: "127.0.0.1", uploadDirectory: path).validate())
+    }
+    let config = HostedServerConfiguration(
+      address: "127.0.0.1", uploadDirectory: "/tmp/Incoming images")
+    XCTAssertNoThrow(try config.validate())
+    XCTAssertEqual(
+      try JSONDecoder().decode(HostedServerConfiguration.self, from: JSONEncoder().encode(config)),
+      config)
+  }
+
+  func testHostedUploadDirectoryIsPassedToRustAndReceivesAnImage() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "portside-host-uploads-\(UUID().uuidString)")
+    let destination = directory.appendingPathComponent("Incoming images")
+    let host = HostedServer(
+      directory: directory, executableURL: try executable(), tailscaleURL: try identityFixture())
+    defer {
+      host.stop()
+      try? FileManager.default.removeItem(at: directory)
+    }
+    let (reservation, port) = try listeningSocket()
+    close(reservation)
+    let config = HostedServerConfiguration(
+      address: "127.0.0.1", port: port, uploadDirectory: destination.path)
+    try await host.start(config)
+    let profile = ServerProfile(name: "Hosted uploads", host: config.address, port: port)
+    let info = try await ServerAPI.info(for: profile)
+    let settings = try XCTUnwrap(info.uploads)
+    XCTAssertEqual(
+      URL(fileURLWithPath: settings.directory).resolvingSymlinksInPath().path,
+      destination.resolvingSymlinksInPath().path)
+    let data = Data([137, 80, 78, 71, 13, 10, 26, 10, 0, 255])
+    let uploaded = try await FileUploadAPI.upload(
+      .image(name: "clipboard.png", data: data), to: profile, settings: settings)
+    XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: uploaded.path)), data)
+    XCTAssertTrue(uploaded.path.hasPrefix(settings.directory + "/"))
+    host.stop()
+    try await awaitStopped(host)
+    let reloaded = HostedServer(
+      directory: directory, executableURL: try executable(), tailscaleURL: try identityFixture())
+    defer { reloaded.stop() }
+    XCTAssertEqual(reloaded.configuration.uploadDirectory, destination.path)
+  }
+
   func testBindFailureLeavesExistingListenerAloneAndReportsFailure() async throws {
     let binary = try executable()
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(

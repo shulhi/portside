@@ -43,6 +43,8 @@ struct HostingSettingsView: View {
   @State private var address = ""
   @State private var port = "9417"
   @State private var allowedPorts = "3000,5173,8080"
+  @State private var uploadsEnabled = false
+  @State private var uploadDirectory = NSHomeDirectory() + "/PortsideUploads"
   @State private var message: String?
   @State private var copied: String?
   @State private var loaded = false
@@ -93,6 +95,23 @@ struct HostingSettingsView: View {
             )
             .font(.system(size: 11)).foregroundStyle(.secondary)
           }
+          Divider().padding(.vertical, 3)
+          Toggle("Allow file uploads", isOn: $uploadsEnabled)
+            .font(.system(size: 12, weight: .medium))
+          if uploadsEnabled {
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Upload folder").font(.system(size: 11, weight: .medium))
+              HStack {
+                TextField("~/PortsideUploads", text: $uploadDirectory)
+                  .font(.system(size: 12, design: .monospaced))
+                Button("Choose…") { chooseUploadDirectory() }.controlSize(.small)
+              }
+              Text(
+                "Files from your devices are saved here. Rexlink can insert their local paths into Codex or Claude."
+              )
+              .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+          }
         }.textFieldStyle(.roundedBorder).disabled(host.phase.isActive)
 
         HStack(spacing: 8) {
@@ -123,7 +142,11 @@ struct HostingSettingsView: View {
                   try await host.start(
                     HostedServerConfiguration(
                       address: address.trimmingCharacters(in: .whitespacesAndNewlines), port: port,
-                      allowedPorts: allowedPorts.trimmingCharacters(in: .whitespacesAndNewlines)))
+                      allowedPorts: allowedPorts.trimmingCharacters(in: .whitespacesAndNewlines),
+                      uploadDirectory: uploadsEnabled
+                        ? (uploadDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+                          as NSString).expandingTildeInPath
+                        : nil))
                 } catch { message = error.localizedDescription }
               }
             }.buttonStyle(.glass(.regular.tint(Palette.accent.opacity(0.10))))
@@ -138,6 +161,10 @@ struct HostingSettingsView: View {
               "In Portside on your phone, add this Mac using its IP and server port. Access is limited to devices on your Tailscale account. Keep Tailscale connected on both devices."
             )
             .font(.system(size: 11)).foregroundStyle(.secondary)
+            if let directory = host.configuration.uploadDirectory {
+              Text("Uploads: \(directory)").font(.system(size: 11)).foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            }
             HStack {
               Button("Copy address") { copy(host.configuration.address, label: "Address copied") }
               if let copied { Text(copied).font(.system(size: 11)).foregroundStyle(.secondary) }
@@ -155,7 +182,7 @@ struct HostingSettingsView: View {
         )
         .font(.system(size: 11)).foregroundStyle(.secondary)
       }.padding(24)
-    }.frame(width: 520, height: 430)
+    }.frame(width: 520, height: 540)
       .buttonStyle(.glass(.regular.tint(nil))).buttonBorderShape(.capsule)
       .onAppear {
         guard !loaded else { return }
@@ -163,8 +190,25 @@ struct HostingSettingsView: View {
         address = host.configuration.address
         port = String(host.configuration.port)
         allowedPorts = host.configuration.allowedPorts
+        uploadsEnabled = host.configuration.uploadDirectory != nil
+        uploadDirectory =
+          host.configuration.uploadDirectory ?? (NSHomeDirectory() + "/PortsideUploads")
         if address.isEmpty { address = HostedServerConfiguration.tailscaleAddresses().first ?? "" }
       }
+  }
+
+  private func chooseUploadDirectory() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.canCreateDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.prompt = "Choose upload folder"
+    panel.directoryURL = URL(fileURLWithPath: (uploadDirectory as NSString).expandingTildeInPath)
+    panel.begin { response in
+      guard response == .OK, let url = panel.url else { return }
+      uploadDirectory = url.path
+    }
   }
 
   private func detectAddress() {

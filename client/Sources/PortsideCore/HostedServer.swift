@@ -6,11 +6,16 @@ public struct HostedServerConfiguration: Codable, Equatable, Sendable {
   public var address: String
   public var port: UInt16
   public var allowedPorts: String
+  public var uploadDirectory: String?
 
-  public init(address: String = "", port: UInt16 = 9417, allowedPorts: String = "3000,5173,8080") {
+  public init(
+    address: String = "", port: UInt16 = 9417, allowedPorts: String = "3000,5173,8080",
+    uploadDirectory: String? = nil
+  ) {
     self.address = address
     self.port = port
     self.allowedPorts = allowedPorts
+    self.uploadDirectory = uploadDirectory
   }
 
   public var endpoint: String {
@@ -27,6 +32,15 @@ public struct HostedServerConfiguration: Codable, Equatable, Sendable {
       throw PortsideError.invalid(
         "Choose this Mac's Tailscale IP, or a loopback IP for local testing, and a nonzero server port."
       )
+    }
+    if let uploadDirectory {
+      guard uploadDirectory.hasPrefix("/"),
+        !uploadDirectory.unicodeScalars.contains(where: {
+          CharacterSet.controlCharacters.contains($0)
+        })
+      else {
+        throw PortsideError.invalid("Choose an absolute folder for incoming uploads.")
+      }
     }
     let entries = allowedPorts.split(separator: ",", omittingEmptySubsequences: false)
     guard !entries.isEmpty,
@@ -162,6 +176,9 @@ public final class HostedServer: ObservableObject {
         "serve", "--listen", settings.endpoint, "--tailscale-bin", tailscaleURL.path,
         "--allowed-ports", settings.allowedPorts, "--shutdown-on-stdin-eof",
       ]
+      if let uploadDirectory = settings.uploadDirectory {
+        child.arguments?.append(contentsOf: ["--upload-dir", uploadDirectory])
+      }
       child.standardInput = pipe
       child.standardOutput = output
       child.standardError = output

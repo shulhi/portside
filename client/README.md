@@ -80,7 +80,12 @@ Hosting and outgoing forwards work independently. **Stop server** closes incomin
 connections without stopping outgoing forwards. Closing windows keeps hosting
 active; quitting or crashing closes the supervisor pipe and stops the helper.
 Keep this Mac awake. Hosting does not automatically resume at launch or reboot.
-The GUI host mode does not enable incoming file uploads.
+To receive images/files on this Mac, stop hosting, enable **Allow file uploads**
+in Hosting settings, choose an **Upload folder** (default `~/PortsideUploads`),
+and start the server again. The selected folder persists, and the Rust helper
+receives `--upload-dir`. Rexlink can then upload images to this Mac and paste
+returned paths into local Codex/Claude sessions. Existing configurations keep
+uploads disabled until you enable them.
 
 The installed Tailscale CLI is detected at the usual macOS locations and used
 as the LocalAPI identity client. An unavailable CLI, disconnected Tailscale,
