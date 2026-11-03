@@ -30,6 +30,12 @@ struct PortsideApp: App {
           .keyboardShortcut("v", modifiers: [.command, .shift])
           .disabled(model.selectedServerID == nil)
       }
+      CommandMenu("Server") {
+        SettingsLink { Text("Host This Mac…") }
+      }
+    }
+    Settings {
+      HostingSettingsView(host: model.hostedServer)
     }
   }
 }

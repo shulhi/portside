@@ -10,6 +10,7 @@ if (( ${sdk_version%%.*} < 27 )); then
     exit 1
 fi
 sdk_directory="$(xcrun --sdk macosx --show-sdk-path)"
+cargo build --manifest-path ../server/Cargo.toml --release --locked
 xcrun swift build -c release --sdk "$sdk_directory"
 binary_directory="$(xcrun swift build -c release --sdk "$sdk_directory" --show-bin-path)"
 # The linked SDK controls AppKit's native appearance, independently of Info.plist.
@@ -26,11 +27,13 @@ PY
 mkdir -p "$PWD/dist" "$PWD/.build"
 staging_directory="$(mktemp -d "$PWD/.build/app-update.XXXXXX")"
 application_directory="$staging_directory/Portside.app"
-mkdir -p "$application_directory/Contents/MacOS" "$application_directory/Contents/Resources"
+mkdir -p "$application_directory/Contents/MacOS" "$application_directory/Contents/Resources" "$application_directory/Contents/Helpers"
 cp "$binary_directory/Portside" "$application_directory/Contents/MacOS/Portside"
+cp ../server/target/release/portside-server "$application_directory/Contents/Helpers/portside-server"
 cp Resources/Info.plist "$application_directory/Contents/Info.plist"
 xcrun swift scripts/make-icon.swift "$PWD/.build/Portside.iconset"
 iconutil -c icns .build/Portside.iconset -o "$application_directory/Contents/Resources/Portside.icns"
+codesign --force --sign - --identifier app.portside.server "$application_directory/Contents/Helpers/portside-server"
 codesign --force --sign - --identifier app.portside.mac "$application_directory"
 # Replace the bundle by renaming it, rather than overwriting a running executable.
 # Retain the old bundle in the ignored build directory until the app is relaunched.

@@ -128,6 +128,7 @@ struct ContentView: View {
           }
         }.padding(.horizontal, 8)
       }
+      HostingStatusLink(host: model.hostedServer).padding(.horizontal, 12).padding(.top, 12)
       Spacer(minLength: 8)
       HStack(spacing: 6) {
         Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Palette.accent)
@@ -135,7 +136,7 @@ struct ContentView: View {
         Spacer()
         Text(
           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.3.1"
+            ?? "0.4.0"
         )
         .foregroundStyle(.tertiary)
       }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)

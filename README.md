@@ -32,6 +32,8 @@ open dist/Portside.app
 
 See the [client guide](client/README.md) for setup, Keychain storage, and
 end-to-end testing. Server and client have independent build systems.
+The Mac app also bundles the Rust server: choose **Host this Mac** to access
+apps running on that Mac from your Android phone or another computer.
 
 Build the Android client (Android 16 or later):
 

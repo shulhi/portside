@@ -1,7 +1,9 @@
 # Portside for Mac
 
 A native SwiftUI application for bringing apps on your work server to this
-Mac's localhost through Tailscale. Requires macOS 27 or later and Xcode 27 or later.
+Mac's localhost through Tailscale. It can also host this Mac's apps for other
+Portside clients. Requires macOS 27 or later, Xcode 27 or later, and Rust 1.93+
+to build the bundled server.
 There are no third-party Swift dependencies.
 
 The interface uses native Liquid Glass buttons, menus, sheets, and window controls.
@@ -16,8 +18,9 @@ bash scripts/build-app.sh
 open dist/Portside.app
 ```
 
-The script builds an optimized executable, generates the app icon, packages its
-Info.plist, and signs the bundle locally with an ad hoc identity. It uses the
+The script builds optimized Swift and Rust executables, bundles the server in
+`Contents/Helpers`, generates the app icon, packages its Info.plist, and signs
+the helper and bundle locally with ad hoc identities. It uses the
 installed Xcode toolchain when available, without changing `xcode-select`.
 You can also open `Package.swift` in Xcode to work on the application.
 
@@ -29,6 +32,40 @@ The red traffic-light button closes the window while Portside keeps forwards
 and file transfers running. Click its Dock icon to show the window again, or
 use **Window → Show Portside (⌘0)**. Use **Portside → Quit Portside (⌘Q)** to
 quit and stop all forwards and transfers.
+
+## Host apps running on this Mac
+
+Choose **Host this Mac** in the sidebar, **Server → Host This Mac…**, or open
+**Settings (⌘,)**. Hosting starts only when requested:
+
+1. Keep Tailscale connected and use **Detect** to select this Mac's Tailscale IP.
+2. Choose the server port (`9417` by default) and the app ports to share. The
+   default is `3000,5173,8080`; comma-separated ports and ranges are supported.
+3. Click **Start server**. Portside starts its bundled Rust server and checks
+   authenticated readiness before showing **Hosting**.
+4. On your Android phone or another Mac, add this Mac's IP and server port.
+   Use **Copy token** to get its automatically generated token.
+5. Add a forward in that client, using the app's port on this Mac as the remote
+   port, then open the client's localhost browser URL.
+
+Hosting and outgoing remote forwards work independently. **Stop server** closes
+incoming connections without stopping your outgoing forwards. Closing the main
+or Settings window keeps hosting active. Quitting Portside stops it. The helper
+also watches a parent pipe, so a crash or force-quit does not leave an orphaned
+server behind. Keep this Mac awake while accessing its apps remotely. Hosting
+does not automatically resume after app launch, login, or reboot.
+
+Only a literal Tailscale or loopback IP is accepted; wildcard/LAN binds are
+rejected. Use `127.0.0.1` only for local testing. The app's host mode supports
+port forwarding; incoming file uploads are disabled. This mode currently uses
+the same bearer-token authentication as the Ubuntu server. Tailscale WhoIs
+authorization has not yet replaced tokens.
+
+Hosting settings, the private token, and the most recent startup log live in
+`~/Library/Application Support/Portside/Host/`. The host directory is created
+with mode `0700` and its token with mode `0600`. Starting again reuses the token.
+Changes to IP, server port or allowed ports require stopping and starting the
+hosted server. An occupied port produces an error and leaves its owner alone.
 
 ## Connect a work server
 

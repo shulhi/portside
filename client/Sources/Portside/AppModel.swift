@@ -35,6 +35,7 @@ final class AppModel: ObservableObject {
 
   let engine = ForwardEngine()
   let transfers = FileTransferManager()
+  let hostedServer = HostedServer()
   private let store = ConfigurationStore()
   private let vault = TokenVault()
   private var observation: AnyCancellable?
@@ -231,6 +232,7 @@ final class AppModel: ObservableObject {
   func shutdown() {
     stopAll()
     transfers.shutdown()
+    hostedServer.stop()
   }
 
   private func persist(_ next: ClientConfiguration) throws {
