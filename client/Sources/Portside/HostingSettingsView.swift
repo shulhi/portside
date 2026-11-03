@@ -4,9 +4,15 @@ import SwiftUI
 
 struct HostingStatusLink: View {
   @ObservedObject var host: HostedServer
+  @ObservedObject var preferences: AppPreferences
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
-    SettingsLink {
+    Button {
+      preferences.settingsTab = .hosting
+      openSettings()
+      NSApp.activate()
+    } label: {
       HStack(spacing: 8) {
         Image(systemName: "desktopcomputer").foregroundStyle(Palette.accent)
         Text("Host this Mac").font(.system(size: 11, weight: .medium))
@@ -16,6 +22,19 @@ struct HostingStatusLink: View {
         }
       }.padding(8).contentShape(Rectangle())
     }.buttonStyle(.plain).help("Make apps on this Mac available to your other devices.")
+  }
+}
+
+struct HostSettingsButton: View {
+  @ObservedObject var preferences: AppPreferences
+  @Environment(\.openSettings) private var openSettings
+
+  var body: some View {
+    Button("Host This Mac…") {
+      preferences.settingsTab = .hosting
+      openSettings()
+      NSApp.activate()
+    }
   }
 }
 

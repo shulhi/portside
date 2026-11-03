@@ -19,6 +19,13 @@ It uses the installed Xcode toolchain without changing `xcode-select`. Relaunch
 the app when ready; packaging does not overwrite a running executable.
 Release signing and notarization are not configured.
 
+The main window opens at 860 × 520 points, with a native, collapsible server
+sidebar, a compact forward list, and a detail pane. Columns resize independently.
+Select a forward to see its route, connection count, received bytes, and settings.
+Use its play/stop control in the list, or the Start/Stop button in **Overview**.
+Toolbar actions add forwards, open localhost in a browser, and edit or remove items.
+Blue is the single accent, with system selection colors and light/dark appearance.
+
 ## Tailscale identity
 
 Portside uses your existing Tailscale connection. The server verifies every
@@ -46,14 +53,19 @@ connections, not the number of forwarded apps. **Ready** is the most recent
 server check, not a continuous availability monitor.
 
 The red traffic light closes the window while forwards continue. Click the Dock
-icon or **Window → Show Portside (⌘0)** to reopen it. **Quit (⌘Q)** stops forwards,
-transfers and hosting. Rules with **Start when Portside opens** enabled start on
+icon or **Window → Show Portside (⌘0)** to reopen it. Enable **Settings → General →
+Run in menu bar** to hide the Dock icon and keep Portside in the menu bar instead.
+The preference persists across launches. Its menu can start or stop individual
+forwards, add a forward, open the window, and open Settings. **Show Dock Icon**
+turns menu-bar mode off and reopens the window. **Quit Portside** in that menu,
+or **Quit (⌘Q)** in the window, stops forwards, transfers and hosting.
+Rules with **Start when Portside opens** enabled start on
 launch; broken TCP connections do not resume after sleep or network loss.
 
 ## Host apps running on this Mac
 
 Choose **Host this Mac** in the sidebar, **Server → Host This Mac…**, or
-**Settings (⌘,)**:
+**Settings (⌘,) → Hosting**:
 
 1. Connect Tailscale and click **Detect** to select this Mac's Tailscale IP.
 2. Choose a server port (`9417`) and the app ports to share. The default is
@@ -80,7 +92,8 @@ Tailscale IP for normal hosting.
 
 ## Send files and clipboard images
 
-The selected server has a drop area below the list. Drop regular files, click
+The selected server has a drop area at the bottom of **Overview**. **Files** shows
+the same drop area and a list of this session's transfers. Drop regular files, click
 **Paste**, or focus it and press **⌘V**. **Transfer → Paste Image or Files (⌘⇧V)**
 works throughout the app. The **+** button opens a file picker. Clipboard data is
 read only on explicit paste, not monitored. Folders must be zipped first.
@@ -113,3 +126,7 @@ forwards, binary traffic, both half-closes, port collisions, server supervision,
 file/image uploads and configuration. Named pasteboards keep the user clipboard
 untouched. Real Tailscale identity is also checked separately during deployment.
 Never use the test identity fixture for production hosting.
+
+App tests cover persisted menu-bar preferences and duplicate scene-binding writes.
+After changing scenes or lifecycle code, also launch the packaged release app:
+unit tests and standalone view previews do not exercise the full scene graph.

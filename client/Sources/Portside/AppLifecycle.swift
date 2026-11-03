@@ -7,8 +7,14 @@ enum PortsideWindow {
 
 @MainActor
 final class AppLifecycle: NSObject, NSApplicationDelegate {
+  let model = AppModel()
   var showMainWindow: (() -> Void)?
-  var shutdown: (() -> Void)?
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    NSApp.setActivationPolicy(
+      UserDefaults.standard.bool(forKey: AppPreferences.menuBarKey) ? .accessory : .regular)
+    Task { await model.restore() }
+  }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     false
@@ -23,22 +29,22 @@ final class AppLifecycle: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillTerminate(_ notification: Notification) {
-    shutdown?()
+    model.shutdown()
   }
 }
 
 struct MainWindowView: View {
   @ObservedObject var model: AppModel
+  @ObservedObject var preferences: AppPreferences
   let lifecycle: AppLifecycle
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
-    ContentView(model: model)
-      .frame(minWidth: 760, minHeight: 440)
+    ContentView(model: model, preferences: preferences)
+      .frame(minWidth: 780, minHeight: 440)
       .onAppear {
         // Retain the scene-opening action while its last window is closed.
         lifecycle.showMainWindow = { openWindow(id: PortsideWindow.main) }
-        lifecycle.shutdown = { model.shutdown() }
       }
       .task { await model.restore() }
   }

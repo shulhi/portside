@@ -4,38 +4,25 @@ import SwiftUI
 @main
 struct PortsideApp: App {
   @NSApplicationDelegateAdaptor(AppLifecycle.self) private var lifecycle
-  @StateObject private var model = AppModel()
+  @StateObject private var preferences = AppPreferences()
+  private var model: AppModel { lifecycle.model }
 
   var body: some Scene {
     Window("Portside", id: PortsideWindow.main) {
-      MainWindowView(model: model, lifecycle: lifecycle)
+      MainWindowView(model: model, preferences: preferences, lifecycle: lifecycle)
     }
-    .defaultSize(width: 920, height: 560)
-    .windowStyle(.hiddenTitleBar)
+    .defaultSize(width: 860, height: 520)
+    .windowToolbarStyle(.unified)
     .commands {
-      MainWindowCommands()
-      CommandGroup(replacing: .newItem) {
-        Button("New Forward…") {
-          if let id = model.selectedServerID {
-            model.forwardEditor = ForwardEditorContext(serverID: id)
-          } else {
-            model.serverEditor = ServerEditorContext()
-          }
-        }.keyboardShortcut("n")
-        Button("Add Server…") { model.serverEditor = ServerEditorContext() }.keyboardShortcut(
-          "n", modifiers: [.command, .shift])
-      }
-      CommandMenu("Transfer") {
-        Button("Paste Image or Files") { model.pasteFiles() }
-          .keyboardShortcut("v", modifiers: [.command, .shift])
-          .disabled(model.selectedServerID == nil)
-      }
-      CommandMenu("Server") {
-        SettingsLink { Text("Host This Mac…") }
-      }
+      PortsideCommands(model: model, preferences: preferences)
     }
     Settings {
-      HostingSettingsView(host: model.hostedServer)
+      AppSettingsView(preferences: preferences, host: model.hostedServer)
     }
+    MenuBarExtra(
+      "Portside", systemImage: "arrow.left.arrow.right", isInserted: $preferences.runInMenuBar
+    ) {
+      MenuBarContent(model: model, preferences: preferences)
+    }.menuBarExtraStyle(.menu)
   }
 }

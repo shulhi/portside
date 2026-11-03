@@ -3,36 +3,51 @@ import PortsideCore
 import SwiftUI
 
 enum Palette {
-  static let accent = Color(red: 0.10, green: 0.48, blue: 0.40)
+  static let accent = Color.blue
   static let canvas = Color(nsColor: .windowBackgroundColor)
   static let surface = Color(nsColor: .controlBackgroundColor)
 }
 
+private enum WorkspaceTab: String, CaseIterable {
+  case overview = "Overview"
+  case files = "Files"
+}
+
 struct ContentView: View {
   @ObservedObject var model: AppModel
+  @ObservedObject var preferences: AppPreferences
+  @State private var selectedForwardID: UUID?
+  @State private var tab = WorkspaceTab.overview
   @State private var deletingForward: ForwardRule?
   @State private var deletingServer: ServerProfile?
 
-  private var visibleActiveCount: Int {
+  private var selectedForward: ForwardRule? {
+    model.visibleForwards.first { $0.id == selectedForwardID }
+  }
+  private var activeCount: Int {
     model.visibleForwards.filter { model.snapshot($0).phase == .listening }.count
   }
 
-  private var visibleConnectionCount: Int {
-    model.visibleForwards.reduce(0) { $0 + model.snapshot($1).connections }
-  }
-
   var body: some View {
-    HStack(spacing: 0) {
-      sidebar.frame(width: 184)
-        .overlay(alignment: .trailing) {
-          Rectangle().fill(Color(nsColor: .separatorColor)).frame(width: 1)
-            .ignoresSafeArea(.container, edges: .vertical).allowsHitTesting(false)
-        }
-      mainContent.frame(maxWidth: .infinity, maxHeight: .infinity)
+    NavigationSplitView {
+      sidebar.navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 220)
+    } content: {
+      forwards.navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 340)
+    } detail: {
+      detail
     }
-    .background(Palette.canvas)
-    .buttonStyle(.glass(.regular.tint(nil)))
-    .buttonBorderShape(.capsule)
+    .navigationSplitViewStyle(.balanced)
+    .tint(Palette.accent)
+    .onAppear { reconcileSelection() }
+    .onChange(of: model.selectedServerID) { _, _ in
+      selectedForwardID = model.visibleForwards.first?.id
+    }
+    .onChange(of: model.visibleForwards.map(\.id)) { _, _ in reconcileSelection() }
+    .task(id: model.selectedServerID) {
+      if let server = model.selectedServer, model.serverStates[server.id] == nil {
+        await model.check(server)
+      }
+    }
     .sheet(item: $model.serverEditor) { context in
       ServerEditor(model: model, existing: context.server)
     }
@@ -75,305 +90,240 @@ struct ContentView: View {
   }
 
   private var sidebar: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 9) {
-        Image(systemName: "arrow.up.right").font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(.white).frame(width: 27, height: 27)
-          .background(Palette.accent.gradient, in: RoundedRectangle(cornerRadius: 8))
-        Text("Portside").font(.system(size: 16, weight: .semibold))
-      }.padding(.top, 18).padding(.horizontal, 16).padding(.bottom, 23)
-
-      HStack {
-        Text("SERVERS").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(
-          .secondary)
-        Spacer()
-        Button {
-          model.serverEditor = ServerEditorContext()
-        } label: {
-          Image(systemName: "plus").font(.system(size: 11, weight: .medium))
-        }.controlSize(.small).buttonBorderShape(.circle).help("Add server")
-      }.padding(.horizontal, 17).padding(.bottom, 9)
-
-      ScrollView {
-        VStack(spacing: 3) {
+    VStack(spacing: 0) {
+      List(selection: $model.selectedServerID) {
+        Section("Servers") {
           ForEach(model.servers) { server in
-            Button {
-              model.selectedServerID = server.id
-            } label: {
-              HStack(spacing: 8) {
-                Image(systemName: "laptopcomputer").font(.system(size: 13))
-                  .foregroundStyle(
-                    model.selectedServerID == server.id ? Palette.accent : .secondary)
-                Text(server.name).font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
-                  .lineLimit(1)
-                Spacer(minLength: 0)
-                Circle().fill(
-                  model.serverStates[server.id]?.isReady == true
-                    ? Palette.accent : Color.secondary.opacity(0.35)
-                )
-                .frame(width: 5, height: 5)
-              }.padding(.horizontal, 9).padding(.vertical, 9).contentShape(Rectangle())
-                .background(
-                  model.selectedServerID == server.id ? Palette.accent.opacity(0.10) : .clear,
-                  in: RoundedRectangle(cornerRadius: 7))
-            }.buttonStyle(.plain).help(server.host)
+            HStack(spacing: 9) {
+              Image(systemName: "server.rack")
+              Text(server.name).lineLimit(1)
+              Spacer(minLength: 0)
+            }.padding(.vertical, 3).tag(server.id).help(server.host)
               .contextMenu {
-                Button("Edit Server…") { model.serverEditor = ServerEditorContext(server: server) }
+                Button("Edit Server…") { editServer(server) }
                 Button("Remove Server…", role: .destructive) { deletingServer = server }
               }
           }
-          if model.servers.isEmpty {
-            Text("Add your work server.").font(.system(size: 11)).foregroundStyle(.secondary)
-              .frame(maxWidth: .infinity, alignment: .leading).padding(9)
-          }
-        }.padding(.horizontal, 8)
-      }
-      HostingStatusLink(host: model.hostedServer).padding(.horizontal, 12).padding(.top, 12)
-      Spacer(minLength: 8)
-      HStack(spacing: 6) {
-        Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(Palette.accent)
-        Text("Via Tailscale")
-        Spacer()
-        Text(
-          Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.5.0"
-        )
-        .foregroundStyle(.tertiary)
-      }.font(.system(size: 10)).foregroundStyle(.secondary).padding(16)
-        .help("Keep Tailscale connected on both machines.")
-    }.background(.regularMaterial)
+          Button("Add Server…", systemImage: "plus") {
+            model.serverEditor = ServerEditorContext()
+          }.foregroundStyle(.secondary).buttonStyle(.plain).padding(.vertical, 3)
+        }
+      }.listStyle(.sidebar)
+      VStack(alignment: .leading, spacing: 10) {
+        HostingStatusLink(host: model.hostedServer, preferences: preferences)
+        Label("Via Tailscale", systemImage: "point.3.connected.trianglepath.dotted")
+          .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
+          .help("Keep Tailscale connected on both machines.")
+      }.padding(12)
+    }.navigationTitle("Portside")
   }
 
-  private var mainContent: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 10) {
-        Text("Port forwards").font(.system(size: 21, weight: .semibold)).tracking(-0.4)
-        Spacer()
-        Button {
-          if let id = model.selectedServerID {
-            model.forwardEditor = ForwardEditorContext(serverID: id)
-          } else {
-            model.serverEditor = ServerEditorContext()
+  private var forwards: some View {
+    VStack(spacing: 0) {
+      if model.selectedServer != nil {
+        if model.visibleForwards.isEmpty {
+          ContentUnavailableView {
+            Label("No forwards", systemImage: "arrow.left.arrow.right")
+          } description: {
+            Text("Add an app port to get started.")
+          } actions: {
+            Button("New Forward…", action: newForward)
           }
-        } label: {
-          Label(model.selectedServer == nil ? "Add server" : "New forward", systemImage: "plus")
+        } else {
+          List(selection: $selectedForwardID) {
+            ForEach(model.visibleForwards) { rule in
+              ForwardListRow(
+                rule: rule, snapshot: model.snapshot(rule),
+                starting: model.starting.contains(rule.id), toggle: { toggle(rule) }
+              )
+              .tag(rule.id).contextMenu { forwardActions(rule) }
+            }
+          }.listStyle(.inset)
         }
-        .font(.system(size: 12, weight: .medium))
-        .buttonStyle(.glass(.regular.tint(Palette.accent.opacity(0.10))))
-        .controlSize(.regular).help("New forward (⌘N)")
+        if let server = model.selectedServer { serverFooter(server) }
+      } else {
+        ContentUnavailableView("Choose a server", systemImage: "server.rack")
+      }
+    }
+    .background(Palette.surface)
+    .navigationTitle(model.selectedServer?.name ?? "Forwards")
+    .navigationSubtitle("\(activeCount) running")
+    .toolbar {
+      ToolbarItemGroup(placement: .primaryAction) {
+        Button("New Forward", systemImage: "plus", action: newForward).help("New forward (⌘N)")
         if let server = model.selectedServer {
-          Menu {
-            Button("Edit Server…") { model.serverEditor = ServerEditorContext(server: server) }
-            Button("Remove Server…", role: .destructive) { deletingServer = server }
+          Menu("Server Actions", systemImage: "ellipsis.circle") {
+            Button("Edit Server…") { editServer(server) }
+            Button("Check Connection", systemImage: "arrow.clockwise") {
+              Task { await model.check(server) }
+            }
             Divider()
             Button("Stop All Forwards") { model.stopAll() }.disabled(model.activeCount == 0)
-          } label: {
-            Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
-              .foregroundStyle(.secondary).frame(width: 28, height: 28)
-          }.menuStyle(.borderlessButton).menuIndicator(.hidden).buttonStyle(.plain)
-            .frame(width: 28, height: 28).contentShape(.circle)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .accessibilityLabel("Server actions")
+            Button("Remove Server…", role: .destructive) { deletingServer = server }
+          }.menuIndicator(.hidden).help("Server actions")
         }
-      }.padding(.bottom, 16)
-
-      if let server = model.selectedServer {
-        connectionBar(server).padding(.bottom, 16)
-        HStack {
-          Text(
-            "\(model.visibleForwards.count) \(model.visibleForwards.count == 1 ? "forward" : "forwards")"
-          )
-          Spacer()
-          Text("\(visibleActiveCount) active · \(visibleConnectionCount) connections")
-            .monospacedDigit()
-        }.font(.system(size: 11)).foregroundStyle(.secondary).padding(.bottom, 10)
-
-        if model.visibleForwards.isEmpty { emptyForwards } else { forwardList }
-        FileDropView(model: model, transfers: model.transfers, server: server).padding(.top, 12)
-      } else {
-        welcome
       }
-    }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 16)
+    }
   }
 
-  private var forwardList: some View {
+  private var detail: some View {
     VStack(spacing: 0) {
-      HStack(spacing: 8) {
-        Text("NAME").frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
-        Text("LOCAL → REMOTE").frame(width: 144, alignment: .leading)
-        Text("STATUS").frame(width: 68, alignment: .leading)
-        Color.clear.frame(width: 122, height: 1)
-      }.font(.system(size: 9, weight: .medium)).tracking(0.6).foregroundStyle(.secondary)
-        .padding(.horizontal, 12).padding(.vertical, 9)
-      Divider()
-      ScrollView {
-        LazyVStack(spacing: 0) {
-          ForEach(model.visibleForwards) { rule in
-            ForwardRow(
-              rule: rule, snapshot: model.snapshot(rule),
-              starting: model.starting.contains(rule.id),
-              toggle: {
-                if model.snapshot(rule).phase == .listening || model.starting.contains(rule.id) {
-                  model.stop(rule)
-                } else {
-                  Task { await model.start(rule) }
-                }
-              }, open: { model.open(rule) },
-              edit: {
-                model.forwardEditor = ForwardEditorContext(rule: rule, serverID: rule.serverID)
-              }, remove: { deletingForward = rule })
-            if rule.id != model.visibleForwards.last?.id { Divider().padding(.horizontal, 12) }
+      if let server = model.selectedServer {
+        if tab == .files {
+          FileWorkspace(model: model, transfers: model.transfers, server: server).id(server.id)
+        } else {
+          if let rule = selectedForward {
+            ForwardDetailView(
+              rule: rule, server: server, snapshot: model.snapshot(rule),
+              starting: model.starting.contains(rule.id), toggle: { toggle(rule) },
+              edit: { editForward(rule) })
+          } else {
+            ContentUnavailableView {
+              Label("Your apps, connected", systemImage: "arrow.left.arrow.right")
+            } description: {
+              Text("Forward a port on \(server.name) to localhost on this Mac.")
+            } actions: {
+              Button("New Forward…", action: newForward)
+            }
           }
+          FileDropView(model: model, transfers: model.transfers, server: server)
+            .id(server.id).padding(12)
+        }
+      } else {
+        ContentUnavailableView {
+          Label("Welcome to Portside", systemImage: "network")
+        } description: {
+          Text("Connect a Tailscale device to bring its apps to localhost.")
+        } actions: {
+          Button("Add Server…") { model.serverEditor = ServerEditorContext() }
         }
       }
-    }.background(Palette.surface, in: RoundedRectangle(cornerRadius: 8))
-      .clipShape(RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).stroke(.primary.opacity(0.08)))
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.surface)
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        Picker("Workspace", selection: $tab) {
+          ForEach(WorkspaceTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }.pickerStyle(.segmented).frame(width: 180).disabled(model.selectedServer == nil)
+      }
+      ToolbarItemGroup(placement: .primaryAction) {
+        if let rule = selectedForward, tab == .overview {
+          Button("Open in Browser", systemImage: "arrow.up.right.square") { model.open(rule) }
+            .disabled(model.snapshot(rule).phase != .listening)
+            .help(Text(verbatim: "Open localhost:\(rule.localPort) in browser"))
+          Menu("Forward Actions", systemImage: "ellipsis") { forwardActions(rule) }
+            .menuIndicator(.hidden)
+        }
+      }
+    }
   }
 
-  private func connectionBar(_ server: ServerProfile) -> some View {
+  private func serverFooter(_ server: ServerProfile) -> some View {
     let state = model.serverStates[server.id] ?? .unchecked
-    return VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 8) {
-        Image(systemName: "server.rack").font(.system(size: 13)).foregroundStyle(Palette.accent)
-        Text(verbatim: "\(server.host):\(server.port)")
-          .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-          .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-          .help(Text(verbatim: "\(server.host):\(server.port)"))
-        Spacer(minLength: 4)
+    return VStack(alignment: .leading, spacing: 6) {
+      Divider().padding(.bottom, 5)
+      HStack(spacing: 6) {
         if state.isChecking {
           ProgressView().controlSize(.mini)
-        } else if state.isReady {
-          Label("Ready", systemImage: "checkmark.circle.fill").font(
-            .system(size: 10, weight: .medium)
-          )
-          .foregroundStyle(Palette.accent).help("The last server connection check succeeded.")
+        } else {
+          Circle().fill(state.isReady ? Palette.accent : .secondary.opacity(0.5))
+            .frame(width: 6, height: 6)
         }
-        Button {
+        Text(state.isChecking ? "Checking…" : state.isReady ? "Server ready" : "Not connected")
+          .font(.system(size: 11, weight: .medium))
+        Spacer()
+        Button("Check Connection", systemImage: "arrow.clockwise") {
           Task { await model.check(server) }
-        } label: {
-          Label(state.isReady ? "Check" : "Connect", systemImage: "arrow.clockwise")
-        }
-        .controlSize(.small).disabled(state.isChecking)
+        }.labelStyle(.iconOnly).buttonStyle(.borderless).disabled(state.isChecking)
+          .help("Check server connection")
       }
+      Text(verbatim: "\(server.host):\(server.port)")
+        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+        .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
       if case .failed(let message) = state {
-        Label(message, systemImage: "exclamationmark.circle").font(.system(size: 11))
-          .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+        Text(message).font(.caption).foregroundStyle(.orange)
+          .fixedSize(horizontal: false, vertical: true)
       }
-    }.padding(.horizontal, 11).padding(.vertical, 9)
-      .background(Palette.surface.opacity(0.65), in: RoundedRectangle(cornerRadius: 9))
-      .overlay(RoundedRectangle(cornerRadius: 9).stroke(.primary.opacity(0.06)))
+    }.padding(.horizontal, 14).padding(.bottom, 12)
   }
 
-  private var welcome: some View {
-    VStack(spacing: 12) {
-      Image(systemName: "laptopcomputer").font(.system(size: 28, weight: .light)).foregroundStyle(
-        Palette.accent)
-      Text("Connect your work server").font(.system(size: 16, weight: .medium))
-      Text("Bring its apps to localhost on this Mac.").font(.system(size: 12)).foregroundStyle(
-        .secondary)
-      Button("Add server") { model.serverEditor = ServerEditorContext() }
-        .buttonStyle(.glass(.regular.tint(Palette.accent.opacity(0.10)))).padding(.top, 3)
-    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+  @ViewBuilder private func forwardActions(_ rule: ForwardRule) -> some View {
+    Button("Edit Forward…") { editForward(rule) }
+    Button("Copy Local URL") {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(rule.browserURL.absoluteString, forType: .string)
+    }
+    Divider()
+    Button("Remove Forward…", role: .destructive) { deletingForward = rule }
   }
-
-  private var emptyForwards: some View {
-    VStack(spacing: 10) {
-      Text("No forwards yet").font(.system(size: 15, weight: .medium))
-      Text("Choose an app port to make it available locally.").font(.system(size: 12))
-        .foregroundStyle(.secondary)
-      Button("New forward") {
-        if let id = model.selectedServerID {
-          model.forwardEditor = ForwardEditorContext(serverID: id)
-        }
-      }.padding(.top, 3)
-    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+  private func reconcileSelection() {
+    if !model.visibleForwards.contains(where: { $0.id == selectedForwardID }) {
+      selectedForwardID = model.visibleForwards.first?.id
+    }
+  }
+  private func newForward() {
+    if let id = model.selectedServerID {
+      model.forwardEditor = ForwardEditorContext(serverID: id)
+    } else {
+      model.serverEditor = ServerEditorContext()
+    }
+  }
+  private func editServer(_ server: ServerProfile) {
+    model.serverEditor = ServerEditorContext(server: server)
+  }
+  private func editForward(_ rule: ForwardRule) {
+    model.forwardEditor = ForwardEditorContext(rule: rule, serverID: rule.serverID)
+  }
+  private func toggle(_ rule: ForwardRule) {
+    if model.snapshot(rule).phase == .listening || model.starting.contains(rule.id) {
+      model.stop(rule)
+    } else {
+      Task { await model.start(rule) }
+    }
   }
 }
 
-private struct ForwardRow: View {
+private struct ForwardListRow: View {
   let rule: ForwardRule
   let snapshot: ForwardSnapshot
   let starting: Bool
   let toggle: () -> Void
-  let open: () -> Void
-  let edit: () -> Void
-  let remove: () -> Void
-
-  private var listening: Bool { snapshot.phase == .listening }
-  private var status: String {
-    if starting { return "Starting…" }
-    if listening {
-      return snapshot.connections == 0 ? "Listening" : "\(snapshot.connections) conn."
-    }
-    return snapshot.phase == .failed ? "Failed" : "Stopped"
-  }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 8) {
-        HStack(spacing: 7) {
-          Circle().fill(
-            listening
-              ? Palette.accent : snapshot.phase == .failed ? .orange : .secondary.opacity(0.35)
-          )
-          .frame(width: 5, height: 5)
-          Text(rule.name).font(.system(size: 12, weight: .medium)).lineLimit(1).help(rule.name)
-        }.frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
-        HStack(spacing: 6) {
-          Text(verbatim: "\(rule.localPort)").foregroundStyle(listening ? Palette.accent : .primary)
-          Image(systemName: "arrow.right").font(.system(size: 9)).foregroundStyle(.tertiary)
-          Text(verbatim: "\(rule.remotePort)").foregroundStyle(.secondary)
-        }.font(.system(size: 11, design: .monospaced)).frame(width: 144, alignment: .leading)
-          .help(
-            Text(
-              verbatim:
-                "localhost:\(rule.localPort) → \(rule.family == .ipv4 ? "127.0.0.1" : "[::1]"):\(rule.remotePort)"
-            ))
-        HStack(spacing: 4) {
-          if starting { ProgressView().controlSize(.mini) }
-          Text(status).lineLimit(1)
-        }.font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 68, alignment: .leading)
-          .help("\(snapshot.connections) active TCP connections")
-        HStack(spacing: 6) {
-          Button(action: open) {
-            Image(systemName: "arrow.up.right.square").font(.system(size: 12))
-          }
-          .controlSize(.small).buttonBorderShape(.circle).foregroundStyle(.secondary)
-          .disabled(!listening)
-          .help(Text(verbatim: "Open localhost:\(rule.localPort) in browser")).accessibilityLabel(
-            "Open \(rule.name)")
-          Button(starting ? "Cancel" : listening ? "Stop" : "Start", action: toggle)
-            .controlSize(.small).frame(width: 56)
-          Menu {
-            Button("Edit Forward…", action: edit)
-            Button("Copy Local URL") {
-              NSPasteboard.general.clearContents()
-              NSPasteboard.general.setString(rule.browserURL.absoluteString, forType: .string)
-            }
-            Divider()
-            Text(
-              "Received \(ByteCountFormatter.string(fromByteCount: Int64(clamping: snapshot.receivedBytes), countStyle: .file))"
-            )
-            if rule.autoStart { Text("Starts when Portside opens") }
-            Divider()
-            Button("Remove Forward…", role: .destructive, action: remove)
-          } label: {
-            Image(systemName: "ellipsis").font(.system(size: 11, weight: .semibold))
-              .foregroundStyle(.secondary).frame(width: 24, height: 24)
-          }
-          .menuStyle(.borderlessButton).menuIndicator(.hidden).buttonStyle(.plain)
-          .frame(width: 24, height: 24).contentShape(.circle)
-          .glassEffect(.regular.interactive(), in: .circle)
-          .accessibilityLabel("Actions for \(rule.name)")
-        }.frame(width: 122, alignment: .trailing)
-      }.padding(.horizontal, 12).padding(.vertical, 8)
-      if let error = snapshot.error {
-        Label(error, systemImage: "exclamationmark.circle").font(.system(size: 10)).foregroundStyle(
-          .orange
-        )
-        .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 12).padding(.bottom, 8)
+    HStack(spacing: 10) {
+      Image(systemName: "arrow.left.arrow.right")
+        .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+        .frame(width: 22, height: 26)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(rule.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+        HStack(spacing: 5) {
+          Text(verbatim: "\(rule.localPort)")
+          Image(systemName: "arrow.right").font(.system(size: 8))
+          Text(verbatim: "\(rule.remotePort)")
+        }.font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
       }
-    }
+      Spacer(minLength: 0)
+      if snapshot.phase == .failed {
+        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+          .help(snapshot.error ?? "Forward failed")
+      }
+      Button(action: toggle) {
+        if starting {
+          ProgressView().controlSize(.mini).frame(width: 18, height: 18)
+        } else {
+          Image(systemName: snapshot.phase == .listening ? "stop.fill" : "play.fill")
+            .font(.system(size: 12)).frame(width: 18, height: 18)
+        }
+      }.buttonStyle(.borderless).foregroundStyle(.secondary)
+        .help(
+          starting
+            ? "Cancel starting \(rule.name)"
+            : snapshot.phase == .listening ? "Stop \(rule.name)" : "Start \(rule.name)"
+        )
+        .accessibilityLabel(
+          starting
+            ? "Cancel \(rule.name)"
+            : snapshot.phase == .listening ? "Stop \(rule.name)" : "Start \(rule.name)")
+    }.padding(.vertical, 3).contentShape(Rectangle())
   }
 }

@@ -12,5 +12,6 @@ let package = Package(
     .target(name: "PortsideCore"),
     .executableTarget(name: "Portside", dependencies: ["PortsideCore"]),
     .testTarget(name: "PortsideCoreTests", dependencies: ["PortsideCore"]),
+    .testTarget(name: "PortsideAppTests", dependencies: ["Portside"]),
   ]
 )

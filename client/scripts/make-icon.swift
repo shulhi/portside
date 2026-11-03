@@ -18,8 +18,8 @@ for points in [16, 32, 128, 256, 512] {
       roundedRect: NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2),
       xRadius: size * 0.19, yRadius: size * 0.19)
     NSGradient(
-      starting: NSColor(srgbRed: 0.15, green: 0.58, blue: 0.48, alpha: 1),
-      ending: NSColor(srgbRed: 0.06, green: 0.34, blue: 0.29, alpha: 1))!.draw(
+      starting: NSColor(srgbRed: 0.15, green: 0.61, blue: 1.0, alpha: 1),
+      ending: NSColor(srgbRed: 0.05, green: 0.29, blue: 0.85, alpha: 1))!.draw(
         in: square, angle: -70)
     let arrow = NSBezierPath()
     arrow.lineWidth = size * 0.066
