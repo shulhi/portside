@@ -48,6 +48,9 @@ enum Command {
         /// Maximum size of each uploaded file in bytes (default: 100 MiB).
         #[arg(long, default_value_t = 100 * 1024 * 1024, value_parser = clap::value_parser!(u64).range(1..))]
         max_upload_bytes: u64,
+        /// Stop when the supervising application's stdin pipe closes.
+        #[arg(long)]
+        shutdown_on_stdin_eof: bool,
     },
 }
 
@@ -68,6 +71,7 @@ async fn main() -> Result<()> {
             max_tunnels,
             upload_dir,
             max_upload_bytes,
+            shutdown_on_stdin_eof,
         } => {
             let metadata = fs::metadata(&token_file)
                 .context("cannot read token file; create one using generate-token")?;
@@ -95,6 +99,23 @@ async fn main() -> Result<()> {
             config.validate()?;
             let listener = TcpListener::bind(listen).await.context("cannot bind server; confirm Tailscale is connected and the address belongs to this machine")?;
             let shutdown = CancellationToken::new();
+            if shutdown_on_stdin_eof {
+                let parent_shutdown = shutdown.clone();
+                // A plain thread avoids an uncancellable Tokio blocking-stdin task
+                // keeping the runtime alive after a signal-triggered shutdown.
+                std::thread::spawn(move || {
+                    use std::io::Read;
+                    let mut input = std::io::stdin().lock();
+                    let mut buffer = [0; 256];
+                    loop {
+                        match input.read(&mut buffer) {
+                            Ok(0) | Err(_) => break,
+                            Ok(_) => {}
+                        }
+                    }
+                    parent_shutdown.cancel();
+                });
+            }
             let signal_shutdown = shutdown.clone();
             let signal_task = tokio::spawn(async move {
                 if let Err(error) = wait_for_signal().await {

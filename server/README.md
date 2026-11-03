@@ -1,5 +1,11 @@
 # Portside server
 
+The Mac application can bundle and manage this server through **Host this Mac**;
+see the [Mac hosting guide](../client/README.md#host-apps-running-on-this-mac).
+Its `--shutdown-on-stdin-eof` option is intended for application supervision:
+closing the parent's stdin pipe requests graceful shutdown. It is off by default
+and should not be enabled in the standalone systemd service.
+
 Bring web apps running on a work server to your Mac's localhost over Tailscale.
 
 Portside has two parts: this Rust server on your work machine and a

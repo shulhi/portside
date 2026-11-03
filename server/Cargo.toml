@@ -1,6 +1,6 @@
 [package]
 name = "portside-server"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.93"
 description = "Private, dynamic TCP forwarding for Portside clients over Tailscale"
