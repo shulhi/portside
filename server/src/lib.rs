@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod config;
 mod tunnel;
 mod uploads;
@@ -10,7 +11,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, Request, State, WebSocketUpgrade},
+    extract::{ConnectInfo, Path, Query, Request, State, WebSocketUpgrade},
     http::{HeaderMap, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -87,9 +88,12 @@ pub async fn serve(
         .with_state(state.clone());
 
     tracing::info!(listen = %bound, max_tunnels = state.config.max_tunnels, "Portside server listening");
-    let result = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown.clone().cancelled_owned())
-        .await;
+    let result = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown.clone().cancelled_owned())
+    .await;
     // Upgraded WebSockets are managed separately from HTTP by axum.
     shutdown.cancel();
     state.tasks.close();
@@ -101,23 +105,7 @@ pub async fn serve(
 }
 
 async fn authorize(State(state): State<AppState>, request: Request, next: Next) -> Response {
-    let authorized = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.as_bytes().strip_prefix(b"Bearer "))
-        .is_some_and(|candidate| state.config.token.matches(candidate));
-    let mut response = if !authorized {
-        let mut response = ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "valid bearer token required",
-        )
-        .into_response();
-        response
-            .headers_mut()
-            .insert(header::WWW_AUTHENTICATE, "Bearer".parse().unwrap());
-        response
-    } else if request.headers().contains_key(header::ORIGIN) {
+    let mut response = if request.headers().contains_key(header::ORIGIN) {
         ApiError::new(
             StatusCode::FORBIDDEN,
             "browser_origin",
@@ -125,7 +113,33 @@ async fn authorize(State(state): State<AppState>, request: Request, next: Next) 
         )
         .into_response()
     } else {
-        next.run(request).await
+        let peer = request
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|value| value.0);
+        match peer {
+            Some(peer) => match state.config.auth.authorize(peer).await {
+                Ok(()) => next.run(request).await,
+                Err(auth::AuthError::Forbidden) => ApiError::new(
+                    StatusCode::FORBIDDEN,
+                    "identity_denied",
+                    "this device is not owned by the server's Tailscale user",
+                )
+                .into_response(),
+                Err(auth::AuthError::Unavailable) => ApiError::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "identity_unavailable",
+                    "cannot verify Tailscale identity; check that Tailscale is connected",
+                )
+                .into_response(),
+            },
+            None => ApiError::new(
+                StatusCode::FORBIDDEN,
+                "identity_required",
+                "Tailscale peer identity is required",
+            )
+            .into_response(),
+        }
     };
     response
         .headers_mut()
@@ -138,6 +152,7 @@ async fn info(State(state): State<AppState>) -> Json<serde_json::Value> {
         "name": "portside-server",
         "version": env!("CARGO_PKG_VERSION"),
         "protocol": PROTOCOL,
+        "authentication": "tailscale-owner",
         "allowed_ports": state.config.allowed_ports.ranges(),
         "excluded_ports": [state.config.listen.port()],
         "max_tunnels": state.config.max_tunnels,

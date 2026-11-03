@@ -5,35 +5,11 @@ use std::{
     str::FromStr,
 };
 
+use crate::auth::TailscaleAuth;
 use anyhow::{Result, bail};
-use subtle::ConstantTimeEq;
 
 pub const PROTOCOL: &str = "portside.tcp.v1";
 pub const MAX_DATA_SIZE: usize = 64 * 1024;
-
-/// Deliberately does not implement Debug: credentials must never enter logs.
-#[derive(Clone)]
-pub struct Token([u8; 64]);
-
-impl FromStr for Token {
-    type Err = anyhow::Error;
-
-    fn from_str(value: &str) -> Result<Self> {
-        let value = value.trim();
-        if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            bail!("token must contain exactly 64 hexadecimal characters");
-        }
-        let mut bytes = [0; 64];
-        bytes.copy_from_slice(value.as_bytes());
-        Ok(Self(bytes))
-    }
-}
-
-impl Token {
-    pub(crate) fn matches(&self, candidate: &[u8]) -> bool {
-        bool::from(self.0.as_slice().ct_eq(candidate))
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct PortPolicy(Vec<RangeInclusive<u16>>);
@@ -89,7 +65,7 @@ impl PortPolicy {
 #[derive(Clone)]
 pub struct ServerConfig {
     pub listen: SocketAddr,
-    pub token: Token,
+    pub auth: TailscaleAuth,
     pub allowed_ports: PortPolicy,
     pub max_tunnels: usize,
     pub upload_dir: Option<PathBuf>,
@@ -166,15 +142,5 @@ mod tests {
         for invalid in ["", "0", "65536", "8100-8000", "3000,", "1-2-3"] {
             assert!(invalid.parse::<PortPolicy>().is_err(), "{invalid}");
         }
-    }
-
-    #[test]
-    fn token_validation_and_comparison() {
-        let secret = "a".repeat(64);
-        let token: Token = format!("{secret}\n").parse().unwrap();
-        assert!(token.matches(secret.as_bytes()));
-        assert!(!token.matches("b".repeat(64).as_bytes()));
-        assert!(!token.matches(b"short"));
-        assert!("g".repeat(64).parse::<Token>().is_err());
     }
 }

@@ -1,3 +1,5 @@
+mod common;
+use std::sync::Arc;
 use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
 
 use portside_server::{
@@ -14,12 +16,11 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
-const TOKEN: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
 struct Server {
     _directory: TempDir,
     root: PathBuf,
     address: SocketAddr,
+    identity: Arc<common::TestIdentity>,
     shutdown: CancellationToken,
     task: JoinHandle<anyhow::Result<()>>,
 }
@@ -32,9 +33,10 @@ impl Server {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let shutdown = CancellationToken::new();
+        let identity = Arc::new(common::TestIdentity::default());
         let config = ServerConfig {
             listen: address,
-            token: TOKEN.parse().unwrap(),
+            auth: identity.auth(),
             allowed_ports: PortPolicy::default(),
             max_tunnels: 8,
             upload_dir: enabled.then(|| root.clone()),
@@ -45,6 +47,7 @@ impl Server {
             _directory: directory,
             root,
             address,
+            identity,
             shutdown,
             task,
         }
@@ -59,11 +62,10 @@ impl Server {
         chunked: bool,
     ) -> (u16, Value) {
         let mut socket = TcpStream::connect(self.address).await.unwrap();
-        let auth = if auth {
-            format!("Authorization: Bearer {TOKEN}\r\n")
-        } else {
-            String::new()
-        };
+        if !auth {
+            self.identity.deny(socket.local_addr().unwrap());
+        }
+        let auth = "";
         let length = if chunked {
             "Transfer-Encoding: chunked\r\n".to_string()
         } else {
@@ -135,7 +137,7 @@ async fn uploads_are_opt_in_and_authenticated() {
             .request("PUT", "/v1/files?filename=x.png", false, b"image", false)
             .await
             .0,
-        401
+        403
     );
     assert_eq!(fs::read_dir(&server.root).unwrap().count(), 0);
     let (_, info) = server.request("GET", "/v1/info", true, b"", false).await;
@@ -275,7 +277,7 @@ async fn size_limits_apply_to_declared_and_chunked_bodies() {
 async fn interrupted_uploads_leave_no_partial_files() {
     let server = Server::start(true, 1024).await;
     let mut socket = TcpStream::connect(server.address).await.unwrap();
-    socket.write_all(format!("PUT /v1/files?filename=incomplete HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TOKEN}\r\nContent-Length: 1000\r\n\r\npart").as_bytes()).await.unwrap();
+    socket.write_all(b"PUT /v1/files?filename=incomplete HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1000\r\n\r\npart").await.unwrap();
     for _ in 0..100 {
         if fs::read_dir(&server.root).unwrap().count() > 0 {
             break;

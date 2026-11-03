@@ -1,14 +1,10 @@
-use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-    net::SocketAddr,
-    path::PathBuf,
-};
+use std::{net::SocketAddr, path::PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use portside_server::{
-    config::{PortPolicy, ServerConfig, Token},
+    auth::TailscaleAuth,
+    config::{PortPolicy, ServerConfig},
     serve,
 };
 use tokio::net::TcpListener;
@@ -27,17 +23,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Create a new 256-bit bearer token file (refuses to overwrite a file).
-    GenerateToken {
-        #[arg(long)]
-        output: PathBuf,
-    },
     /// Run the server on a loopback or Tailscale address.
     Serve {
         #[arg(long, default_value = "127.0.0.1:9417")]
         listen: SocketAddr,
-        #[arg(long)]
-        token_file: PathBuf,
+        #[arg(long, default_value = "tailscale")]
+        tailscale_bin: PathBuf,
         #[arg(long, default_value = "1024-65535")]
         allowed_ports: PortPolicy,
         #[arg(long, default_value_t = 128, value_parser = clap::value_parser!(u16).range(1..))]
@@ -63,34 +54,19 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
     match Cli::parse().command {
-        Command::GenerateToken { output } => generate_token(output),
         Command::Serve {
             listen,
-            token_file,
+            tailscale_bin,
             allowed_ports,
             max_tunnels,
             upload_dir,
             max_upload_bytes,
             shutdown_on_stdin_eof,
         } => {
-            let metadata = fs::metadata(&token_file)
-                .context("cannot read token file; create one using generate-token")?;
-            if metadata.len() > 1024 {
-                bail!("token file is too large");
-            }
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if metadata.permissions().mode() & 0o077 != 0 {
-                    bail!("token file must not be accessible by other users; run chmod 600 on it");
-                }
-            }
-            let token: Token = fs::read_to_string(&token_file)
-                .context("cannot read token file")?
-                .parse()?;
+            let auth = TailscaleAuth::discover(tailscale_bin).await?;
             let config = ServerConfig {
                 listen,
-                token,
+                auth,
                 allowed_ports,
                 max_tunnels: max_tunnels as usize,
                 upload_dir,
@@ -128,27 +104,6 @@ async fn main() -> Result<()> {
             result
         }
     }
-}
-
-fn generate_token(output: PathBuf) -> Result<()> {
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes)
-        .map_err(|error| anyhow::anyhow!("cannot obtain secure random bytes: {error}"))?;
-    let token: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&output)
-        .context("cannot create token file (existing files are never overwritten)")?;
-    writeln!(file, "{token}").context("cannot write token file")?;
-    file.sync_all().context("cannot sync token file")?;
-    tracing::info!(path = %output.display(), "created token file; securely copy this token to your client");
-    Ok(())
 }
 
 async fn wait_for_signal() -> Result<()> {

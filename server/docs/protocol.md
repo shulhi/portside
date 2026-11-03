@@ -16,7 +16,6 @@ It does not change the TCP tunnel protocol. `/v1/info` adds optional `uploads`:
 
 ```http
 PUT /v1/files?filename=screenshot.png&folder=project/screenshots HTTP/1.1
-Authorization: Bearer <token>
 Content-Type: application/octet-stream
 Content-Length: <file-size>
 
@@ -41,9 +40,17 @@ Limits are advertised by `/v1/info` and enforced independently of client checks.
 There is no file listing, deletion, or download endpoint.
 
 Domain errors use the existing JSON error shape. Statuses include 400 for bad
-names/folders or incomplete bodies, 401 for authentication, 403 for directory
+names/folders or incomplete bodies, 403 for identity or directory
 access/containment, 404 when uploads are disabled, 408 for the ten-minute
 deadline, 413 for size limits, 503 for capacity/shutdown, and 500 for disk I/O.
+
+## Authentication
+
+All endpoints authorize the accepted socket's peer through Tailscale WhoIs.
+The server's own Tailscale owner ID is discovered at startup. The node's owner
+and user profile must match that ID; tagged devices are rejected. Clients send
+no secret and do not supply their identity in a header. There is no legacy token
+mode. See the [server guide](../README.md#authentication) for the trust boundary.
 
 ## Connection model
 
@@ -62,13 +69,14 @@ affecting existing tunnels.
 
 ## Discovery
 
-Request `GET http://<server>:9417/v1/info` with the bearer header. Example:
+Request `GET http://<server>:9417/v1/info` through Tailscale, without an authorization header. Example:
 
 ```json
 {
   "name": "portside-server",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "protocol": "portside.tcp.v1",
+  "authentication": "tailscale-owner",
   "allowed_ports": ["1024-65535"],
   "excluded_ports": [9417],
   "max_tunnels": 128,
@@ -91,7 +99,6 @@ There is no listening-process/port-discovery endpoint in v1.
 ```http
 GET /v1/tunnels/5173?family=ipv4 HTTP/1.1
 Host: work-server:9417
-Authorization: Bearer <64-character-token>
 Upgrade: websocket
 Connection: Upgrade
 Sec-WebSocket-Key: <generated-by-WebSocket-library>
@@ -110,11 +117,13 @@ TCP connection therefore produces an HTTP error instead of an apparently
 successful tunnel.
 
 Use a native WebSocket client, such as Foundation's `URLSessionWebSocketTask`.
-Set the bearer and subprotocol headers on its URLRequest, verify the negotiated
-protocol in the session delegate, and configure network/transport permissions
-for the private server address as needed. Requests containing an `Origin`
-header are rejected. Tokens must not appear in URLs, query parameters or logs.
-The macOS client stores the token in Keychain.
+Set the subprotocol header, verify its negotiation, and configure network access
+for the private server address. The server obtains the real peer socket address
+and identifies it through the local Tailscale daemon. Only untagged devices owned
+by the server's Tailscale user are allowed. Supplied identity headers and
+`X-Forwarded-For` do not influence this decision. An unavailable lookup fails
+closed. Requests containing `Origin` are rejected. No Portside token is used.
+Both clients require `authentication: "tailscale-owner"` in `/v1/info`.
 
 ## Binary application messages
 
@@ -194,7 +203,8 @@ Server-generated API errors use this JSON shape before upgrade:
 | HTTP | Code | Meaning |
 | --- | --- | --- |
 | 400 | `protocol_required` | Missing/unsupported WebSocket subprotocol |
-| 401 | `unauthorized` | Missing or invalid bearer token |
+| 403 | `identity_denied` | Peer device is not owned by the server’s Tailscale user |
+| 503 | `identity_unavailable` | Tailscale identity could not be verified |
 | 403 | `browser_origin` | Origin header supplied |
 | 403 | `port_denied` | Port outside policy, zero, or server's own port |
 | 404 | `not_found` | Unknown endpoint |
@@ -226,7 +236,6 @@ their local listeners and create fresh tunnels for subsequent connections.
 
 Use `ws://<tailscale-ip-or-MagicDNS-name>:9417/...` over the existing tailnet.
 Tailscale encrypts the network hop; this server has no separate TLS listener.
-Do not route this token-authenticated HTTP listener over an unencrypted external
-network. Tailscale access policy controls access to server port `9417`, not the
+Only route this identity-authenticated listener over Tailscale. Tailscale access policy controls access to server port `9417`, not the
 individual loopback targets inside tunnels; the server's `allowed_ports` policy
-controls those targets. Bearer-token rotation currently requires a server restart.
+controls those targets. The server owner is discovered at startup; restart after changing its Tailscale account.

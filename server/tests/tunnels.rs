@@ -1,3 +1,5 @@
+mod common;
+use std::sync::{Arc, atomic::Ordering};
 use std::{net::SocketAddr, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
@@ -21,11 +23,11 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-const SECRET: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 struct Server {
     addr: SocketAddr,
+    identity: Arc<common::TestIdentity>,
     shutdown: CancellationToken,
     task: Option<JoinHandle<anyhow::Result<()>>>,
 }
@@ -35,9 +37,10 @@ impl Server {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let shutdown = CancellationToken::new();
+        let identity = Arc::new(common::TestIdentity::default());
         let config = ServerConfig {
             listen: addr,
-            token: SECRET.parse().unwrap(),
+            auth: identity.auth(),
             allowed_ports,
             max_tunnels,
             upload_dir: None,
@@ -46,6 +49,7 @@ impl Server {
         let task = tokio::spawn(serve(listener, config, shutdown.clone()));
         Self {
             addr,
+            identity,
             shutdown,
             task: Some(task),
         }
@@ -55,9 +59,6 @@ impl Server {
         let mut request = format!("ws://{}/v1/tunnels/{port}", self.addr)
             .into_client_request()
             .unwrap();
-        request
-            .headers_mut()
-            .insert("Authorization", format!("Bearer {SECRET}").parse().unwrap());
         request
             .headers_mut()
             .insert("Sec-WebSocket-Protocol", PROTOCOL.parse().unwrap());
@@ -178,33 +179,31 @@ async fn assert_http_error(request: Request<()>, status: StatusCode, code: &str)
 #[tokio::test]
 async fn authentication_and_native_client_boundary() {
     let server = Server::start(8, PortPolicy::default()).await;
-    assert_eq!(server.get("/v1/info", "").await.0, 401);
-    assert_eq!(
-        server
-            .get("/healthz", "Authorization: Bearer wrong\r\n")
-            .await
-            .0,
-        401
-    );
-    let auth = format!("Authorization: Bearer {SECRET}\r\n");
-    let (status, info) = server.get("/v1/info", &auth).await;
+    let (status, info) = server.get("/v1/info", "").await;
     assert_eq!(status, 200);
+    assert_eq!(info["authentication"], "tailscale-owner");
     assert_eq!(info["protocol"], PROTOCOL);
-    assert_eq!(info["active_tunnels"], 0);
-    assert_eq!(server.get("/healthz", &auth).await.1["status"], "ok");
+    assert_eq!(server.get("/healthz", "").await.1["status"], "ok");
     assert_eq!(
         server
-            .get(
-                "/v1/info",
-                &format!("{auth}Origin: https://example.com\r\n")
-            )
+            .get("/v1/info", "Origin: https://example.com\r\n")
             .await
             .0,
         403
     );
-    let mut request = server.request(3000);
-    request.headers_mut().remove("Authorization");
-    assert_http_error(request, StatusCode::UNAUTHORIZED, "unauthorized").await;
+    let mut denied = TcpStream::connect(server.addr).await.unwrap();
+    server.identity.deny(denied.local_addr().unwrap());
+    denied.write_all(b"GET /v1/info HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nX-Forwarded-For: 100.64.0.1\r\nTailscale-User-Login: owner@example.com\r\nAuthorization: Bearer invented\r\n\r\n").await.unwrap();
+    let mut bytes = Vec::new();
+    denied.read_to_end(&mut bytes).await.unwrap();
+    assert!(
+        String::from_utf8(bytes)
+            .unwrap()
+            .starts_with("HTTP/1.1 403")
+    );
+    server.identity.unavailable.store(true, Ordering::SeqCst);
+    assert_eq!(server.get("/healthz", "").await.0, 503);
+    server.identity.unavailable.store(false, Ordering::SeqCst);
     server.stop().await;
 }
 
@@ -387,7 +386,7 @@ async fn invalid_frames_close_only_their_tunnel() {
             .unwrap()
             .unwrap();
     }
-    let auth = format!("Authorization: Bearer {SECRET}\r\n");
+    let auth = String::new();
     assert_eq!(server.get("/healthz", &auth).await.0, 200);
     server.stop().await;
 }
