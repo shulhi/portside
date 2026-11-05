@@ -29,11 +29,13 @@ staging_directory="$(mktemp -d "$PWD/.build/app-update.XXXXXX")"
 application_directory="$staging_directory/Portside.app"
 mkdir -p "$application_directory/Contents/MacOS" "$application_directory/Contents/Resources" "$application_directory/Contents/Helpers"
 cp "$binary_directory/Portside" "$application_directory/Contents/MacOS/Portside"
+cp "$binary_directory/portside-paste" "$application_directory/Contents/Helpers/portside-paste"
 cp ../server/target/release/portside-server "$application_directory/Contents/Helpers/portside-server"
 cp Resources/Info.plist "$application_directory/Contents/Info.plist"
 xcrun swift scripts/make-icon.swift "$PWD/.build/Portside.iconset"
 iconutil -c icns .build/Portside.iconset -o "$application_directory/Contents/Resources/Portside.icns"
 codesign --force --sign - --identifier app.portside.server "$application_directory/Contents/Helpers/portside-server"
+codesign --force --sign - --identifier app.portside.paste "$application_directory/Contents/Helpers/portside-paste"
 codesign --force --sign - --identifier app.portside.mac "$application_directory"
 # Replace the bundle by renaming it, rather than overwriting a running executable.
 # Retain the old bundle in the ignored build directory until the app is relaunched.

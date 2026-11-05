@@ -35,6 +35,9 @@ end-to-end testing. Server and client have independent build systems.
 The Mac app also bundles the Rust server: choose **Host this Mac** to access
 apps running on that Mac from your Android phone or another computer.
 
+Use [Portside image paste for Rex](integrations/rex/README.md) to send a clipboard
+image to the machine hosting the focused terminal and paste its path with ⌘⇧V.
+
 Build the Android client (Android 16 or later):
 
 ```sh
