@@ -18,7 +18,8 @@ class ConfigurationStore(context: Context) {
         return Configuration(
             (0 until servers.length()).map { index ->
                 val s = servers.getJSONObject(index)
-                ServerProfile(s.getString("id"), s.getString("name"), s.getString("host"), s.getInt("port")).also { it.validate() }
+                ServerProfile(s.getString("id"), s.getString("name"), s.getString("host"), s.getInt("port"),
+                    ServerIcon.entries.firstOrNull { it.name == s.optString("icon") } ?: ServerIcon.SERVER).also { it.validate() }
             },
             (0 until forwards.length()).map { index ->
                 val f = forwards.getJSONObject(index)
@@ -31,7 +32,7 @@ class ConfigurationStore(context: Context) {
     @Synchronized
     fun write(configuration: Configuration) {
         val json = JSONObject().put("servers", JSONArray(configuration.servers.map { s ->
-            JSONObject().put("id", s.id).put("name", s.name).put("host", s.host).put("port", s.port)
+            JSONObject().put("id", s.id).put("name", s.name).put("host", s.host).put("port", s.port).put("icon", s.icon.name)
         })).put("forwards", JSONArray(configuration.forwards.map { f ->
             JSONObject().put("id", f.id).put("serverId", f.serverId).put("name", f.name)
                 .put("localPort", f.localPort).put("remotePort", f.remotePort).put("family", f.family)

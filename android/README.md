@@ -4,10 +4,14 @@ A native Kotlin / Jetpack Compose port-forwarding client. Requires Android 16
 (API 36) or later, targets Android 17 (API 37), and uses the same Rust server as
 the Mac app. It uses the phone's existing Tailscale VPN; it creates no second VPN.
 
-Version 0.5 shows every server and its forwards together in a compact, grouped
-list with a blue accent and light appearance. Each server header has **+** to add
-a forward and a menu to check, edit, stop its forwards, or remove the server.
-Each forward has **Start / Stop / Switch** and a menu to open it in the browser,
+Version 0.6 shows every server and its forwards together in a compact, grouped
+list with a blue accent and light appearance. **Add server** is in the top bar;
+each server header has **Add forward** and a menu to check, edit, stop its forwards,
+or remove the server. Tap its icon to edit it and choose Server, Laptop, Desktop,
+Home, Cloud, or Terminal. The choice persists; changing a name or icon keeps
+active forwards running. Changing its address or port stops its forwards.
+Each forward shows `local:remote`, a port icon with a green dot when listening,
+an icon for **Start / Stop / Switch**, and a menu to open it in the browser,
 edit, or remove it. Controls retain standard touch targets. Background forwarding stays
 in the existing foreground service and notification.
 
@@ -39,13 +43,13 @@ distribution checksum are pinned.
    this phone's Tailscale identity and authorizes devices owned by its user.
 4. On Android 17+, allow local network / nearby device access when connecting.
    Allow notifications when starting a forward so its controls stay visible.
-5. Tap **+** beside a server, choosing local `3000` and remote `5173`, for example.
-6. Tap **Start**, then **⋮ → Open in browser** to open `http://127.0.0.1:3000`.
+5. Tap **Add forward** beside a server, choosing local `3000` and remote `5173`, for example.
+6. Tap **▶**, then **⋮ → Open in browser** to open `http://127.0.0.1:3000`.
 
 Localhost belongs to **the phone**; the example reaches port 5173 on the work
 machine. Start and stop rules independently across servers: port `3000` from
 server A and port `4000` from server B can run together. The notification shows all active forwards and has a
-**Stop all** action. Editing stops affected forwards; removal asks for confirmation.
+**Stop all** action. Editing a forward stops it; removal asks for confirmation.
 
 Save the same local port under different servers to reuse a localhost address.
 Only one rule can use that port at a time. Tap **Switch** on an alternative to
@@ -105,7 +109,9 @@ target are connected by a temporary `adb reverse` mapping; test profiles, mappin
 and processes are cleaned up afterward. The script selects the single connected
 emulator unless `ANDROID_SERIAL` is explicitly set. Use an Android 17 test emulator.
 The grouped-screen test verifies that all servers and forwards are visible and
-that a server's add action saves the new forward under that server.
+that a server's add action saves the new forward under that server. It also
+checks the icon picker and persisted selection. Runtime tests verify that
+changing a server icon preserves active forwards.
 
 `LiveConnectionTest` is an opt-in API probe for a connected physical phone. Pass
 `portsideHost` (and optionally `portsideIp`) to the instrumentation runner with

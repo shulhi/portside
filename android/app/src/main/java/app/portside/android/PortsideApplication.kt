@@ -50,10 +50,15 @@ class PortsideApplication : Application() {
     @Synchronized fun saveServer(server: ServerProfile) {
         server.validate()
         val config = state.value.configuration
-        val next = config.copy(servers = config.servers.filterNot { it.id == server.id } + server)
-        persist(next)
-        config.forwards.filter { it.serverId == server.id }.forEach { engine.stop(it.id) }
-        state.update { it.copy(serverStatuses = it.serverStatuses - server.id) }
+        val previous = config.servers.firstOrNull { it.id == server.id }
+        val connectionChanged = previous == null || previous.host != server.host || previous.port != server.port
+        val next = config.copy(servers = if (previous == null) config.servers + server
+            else config.servers.map { if (it.id == server.id) server else it })
+        persist(next, invalidateStarts = connectionChanged)
+        if (connectionChanged) {
+            config.forwards.filter { it.serverId == server.id }.forEach { engine.stop(it.id) }
+            state.update { it.copy(serverStatuses = it.serverStatuses - server.id) }
+        }
     }
     @Synchronized fun saveForward(rule: ForwardRule) {
         rule.validate()
@@ -73,10 +78,10 @@ class PortsideApplication : Application() {
         persist(state.value.configuration.let { it.copy(forwards = it.forwards.filterNot { rule -> rule.id == id }) })
         engine.stop(id)
     }
-    private fun persist(config: Configuration) {
+    private fun persist(config: Configuration, invalidateStarts: Boolean = true) {
         check(canSave) { "Settings could not be loaded; the existing data has been preserved." }
         store.write(config)
-        revision++
+        if (invalidateStarts) revision++
         state.update { it.copy(configuration = config) }
     }
 

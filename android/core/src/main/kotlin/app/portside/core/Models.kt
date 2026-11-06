@@ -6,11 +6,14 @@ import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.UUID
 
+enum class ServerIcon { SERVER, LAPTOP, DESKTOP, HOME, CLOUD, TERMINAL }
+
 data class ServerProfile(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
     val host: String,
     val port: Int = 9417,
+    val icon: ServerIcon = ServerIcon.SERVER,
 ) {
     fun validate() {
         require(name.isNotBlank()) { "Give this server a name." }

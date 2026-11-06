@@ -12,11 +12,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -27,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -132,10 +137,11 @@ private fun PortsideScreen(
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }, actions = {
-            TextButton(onClick = { editingServerId = null; showServer = true }) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Server")
+            FilledTonalButton(onClick = { editingServerId = null; showServer = true },
+                modifier = Modifier.padding(end = 12.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
+                Icon(painterResource(R.drawable.ic_server_add), null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Add server", style = MaterialTheme.typography.labelMedium)
             }
         })
     }) { insets ->
@@ -212,9 +218,11 @@ private fun ServerHeader(server: ServerProfile, status: ServerStatus, active: In
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (status.checking) CircularProgressIndicator(Modifier.padding(horizontal = 10.dp).size(18.dp), strokeWidth = 2.dp)
-            else Icon(painterResource(R.drawable.ic_server), null, Modifier.padding(horizontal = 10.dp).size(18.dp),
-                tint = MaterialTheme.colorScheme.primary)
+            IconButton(onClick = onEdit) {
+                if (status.checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Icon(painterResource(server.icon.drawable), "Edit ${server.name} icon", Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.primary)
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(server.name, style = MaterialTheme.typography.titleSmall, maxLines = 1,
@@ -225,7 +233,10 @@ private fun ServerHeader(server: ServerProfile, status: ServerStatus, active: In
                 Text("${server.host}:${server.port}", style = MaterialTheme.typography.labelSmall, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onAdd) { Icon(Icons.Rounded.Add, "Add forward to ${server.name}", Modifier.size(22.dp)) }
+            OutlinedButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 10.dp),
+                modifier = Modifier.semantics { contentDescription = "Add forward to ${server.name}" }) {
+                Text("Add forward", style = MaterialTheme.typography.labelMedium)
+            }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for server ${server.name}", Modifier.size(20.dp)) }
                 DropdownMenu(menu, { menu = false }) {
@@ -245,6 +256,7 @@ private fun ServerHeader(server: ServerProfile, status: ServerStatus, active: In
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ForwardRow(rule: ForwardRule, snapshot: ForwardSnapshot, conflictingServer: String?, onStart: () -> Unit, onStop: () -> Unit,
     onOpen: () -> Unit, onEdit: () -> Unit, onRemove: () -> Unit) {
@@ -261,20 +273,38 @@ private fun ForwardRow(rule: ForwardRule, snapshot: ForwardSnapshot, conflicting
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(Modifier.padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.padding(end = 10.dp).size(30.dp)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                    .semantics { contentDescription = "Port ${rule.localPort}, $status" }) {
+                    Icon(painterResource(R.drawable.ic_terminal), null, Modifier.align(Alignment.Center).size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Box(Modifier.align(Alignment.BottomEnd).size(9.dp)
+                        .background(if (listening) Color(0xFF219653) else if (snapshot.phase == Phase.FAILED)
+                            MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                        .border(1.5.dp, MaterialTheme.colorScheme.surfaceContainerLow, CircleShape))
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${rule.localPort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleSmall,
-                            color = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                        Text(rule.name, style = MaterialTheme.typography.bodySmall, maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                    Text("→ ${rule.remotePort} · $status", style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                    Text("${rule.localPort}:${rule.remotePort}", fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.titleSmall)
+                    Text("${rule.name} · $status", style = MaterialTheme.typography.labelSmall, maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TextButton(onClick = if (listening || starting) onStop else onStart,
-                    contentPadding = PaddingValues(horizontal = 10.dp)) {
-                    Text(if (starting) "Cancel" else if (listening) "Stop" else if (conflictingServer != null) "Switch" else "Start")
+                val action = if (starting) "Cancel ${rule.name}" else if (listening) "Stop ${rule.name}"
+                    else if (conflictingServer != null) "Switch to ${rule.name}" else "Start ${rule.name}"
+                TooltipBox(positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                    tooltip = { PlainTooltip { Text(action) } }, state = rememberTooltipState()) {
+                    FilledTonalIconButton(onClick = if (listening || starting) onStop else onStart,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = if (listening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)) {
+                        when {
+                            starting -> Icon(Icons.Rounded.Close, action, Modifier.size(18.dp))
+                            listening -> Icon(painterResource(R.drawable.ic_stop), action, Modifier.size(18.dp))
+                            conflictingServer != null -> Icon(painterResource(R.drawable.ic_forward), action, Modifier.size(18.dp))
+                            else -> Icon(Icons.Rounded.PlayArrow, action, Modifier.size(20.dp))
+                        }
+                    }
                 }
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for forward ${rule.name}", Modifier.size(20.dp)) }
@@ -298,15 +328,17 @@ private fun ServerEditor(existing: ServerProfile?, onDismiss: () -> Unit, onSave
     var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
     var host by rememberSaveable { mutableStateOf(existing?.host ?: "") }
     var port by rememberSaveable { mutableStateOf(existing?.port?.toString() ?: "9417") }
+    var iconName by rememberSaveable { mutableStateOf((existing?.icon ?: ServerIcon.SERVER).name) }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "Add server" else "Edit server") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ServerIconPicker(ServerIcon.valueOf(iconName), onSelect = { iconName = it.name })
             OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
             OutlinedTextField(host, { host = it }, label = { Text("Tailscale host") }, placeholder = { Text("work-laptop or 100.x.y.z") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
             OutlinedTextField(port, { port = it }, label = { Text("Server port") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            Text(if (existing == null) "Access uses your existing Tailscale identity." else "Access uses Tailscale identity. Saving stops this server’s forwards.",
+            Text(if (existing == null) "Access uses your existing Tailscale identity." else "Changing the server address stops its forwards. Name and icon changes keep them running.",
                 style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
@@ -314,7 +346,8 @@ private fun ServerEditor(existing: ServerProfile?, onDismiss: () -> Unit, onSave
         TextButton(onClick = {
             try {
                 val parsed = port.toIntOrNull() ?: error("Enter a valid server port.")
-                val server = ServerProfile(id = existing?.id ?: java.util.UUID.randomUUID().toString(), name = name.trim(), host = host.trim(), port = parsed)
+                val server = ServerProfile(id = existing?.id ?: java.util.UUID.randomUUID().toString(), name = name.trim(), host = host.trim(), port = parsed,
+                    icon = ServerIcon.valueOf(iconName))
                 onSave(server); onDismiss()
             } catch (e: Exception) { error = e.message }
         }) { Text("Save server") }

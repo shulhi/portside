@@ -16,21 +16,28 @@ class GroupedServersTest {
 
     @Test fun showsEveryServerAndAddsForwardToTheChosenGroup() {
         val app = compose.activity.application as PortsideApplication
-        val work = ServerProfile(name = "Work laptop", host = "work.tailnet.ts.net")
-        val home = ServerProfile(name = "Home Mac", host = "home.tailnet.ts.net")
+        val work = ServerProfile(name = "Work laptop", host = "work.tailnet.ts.net", icon = ServerIcon.LAPTOP)
+        val home = ServerProfile(name = "Home Mac", host = "home.tailnet.ts.net", icon = ServerIcon.HOME)
+        val web = ForwardRule(serverId = work.id, name = "Web app", localPort = 3000, remotePort = 3000)
         try {
             compose.runOnUiThread {
                 app.saveServer(work); app.saveServer(home)
-                app.saveForward(ForwardRule(serverId = work.id, name = "Web app", localPort = 3000, remotePort = 3000))
+                app.saveForward(web)
                 app.saveForward(ForwardRule(serverId = home.id, name = "Dashboard", localPort = 4000, remotePort = 4000))
                 app.saveForward(ForwardRule(serverId = home.id, name = "Frontend", localPort = 3000, remotePort = 5173))
+                app.snapshot(web.id, ForwardSnapshot(Phase.LISTENING, connections = 2))
             }
             compose.onNodeWithText("Work laptop").assertIsDisplayed()
             compose.onNodeWithText("Home Mac").assertIsDisplayed()
-            compose.onNodeWithText("Web app").assertIsDisplayed()
-            compose.onNodeWithText("Dashboard").assertIsDisplayed()
-            compose.onNodeWithText("Frontend").assertIsDisplayed()
-            compose.onAllNodesWithText("Start").assertCountEquals(3)
+            compose.onNodeWithText("Web app", substring = true).assertIsDisplayed()
+            compose.onNodeWithText("Dashboard", substring = true).assertIsDisplayed()
+            compose.onNodeWithText("Frontend", substring = true).assertIsDisplayed()
+            compose.onNodeWithText("3000:3000").assertIsDisplayed()
+            compose.onNodeWithText("4000:4000").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Stop Web app").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Start Dashboard").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Switch to Frontend").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Port 3000, Listening · 2 connections").assertIsDisplayed()
             compose.onNodeWithContentDescription("Add forward to Work laptop").assertIsDisplayed()
             compose.onNodeWithContentDescription("Add forward to Home Mac").assertIsDisplayed()
 
@@ -44,6 +51,10 @@ class GroupedServersTest {
             })!!
             resolver.openOutputStream(uri)!!.use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
+            compose.onNodeWithContentDescription("Stop Web app").performClick()
+            compose.waitUntil(timeoutMillis = 5000) { app.state.value.snapshots[web.id]?.phase == Phase.STOPPED }
+            compose.onNodeWithContentDescription("Start Web app").assertIsDisplayed()
+
             compose.onNodeWithContentDescription("Add forward to Home Mac").performClick()
             compose.onNodeWithText("New forward").assertIsDisplayed()
             compose.onNode(hasText("Home Mac") and hasAnyAncestor(isDialog())).assertIsDisplayed()
@@ -54,6 +65,13 @@ class GroupedServersTest {
             val added = app.state.value.configuration.forwards.single { it.name == "Home API" }
             assertEquals(home.id, added.serverId)
             assertEquals(4100, added.localPort)
+
+            compose.onNodeWithContentDescription("Edit Work laptop icon").performClick()
+            compose.onNodeWithContentDescription("Cloud icon").performClick().assertIsOn()
+            compose.onNodeWithText("Save server").performClick()
+            compose.waitForIdle()
+            assertEquals(ServerIcon.CLOUD, ConfigurationStore(app).read().servers.first { it.id == work.id }.icon)
+            assertEquals(work.id, app.state.value.configuration.servers.first().id)
         } finally {
             compose.runOnUiThread { app.removeServer(work.id); app.removeServer(home.id) }
         }

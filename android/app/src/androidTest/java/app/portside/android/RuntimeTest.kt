@@ -31,7 +31,7 @@ class RuntimeTest {
     }
 
     @Test fun profilesPersistWithoutCredentials() {
-        val server = ServerProfile(name = "Profile test", host = "127.0.0.1")
+        val server = ServerProfile(name = "Profile test", host = "127.0.0.1", icon = ServerIcon.HOME)
         try {
             instrumentation.runOnMainSync { app.saveServer(server) }
             val secondStore = ConfigurationStore(app)
@@ -58,6 +58,9 @@ class RuntimeTest {
             ActivityScenario.launch(MainActivity::class.java).use { activity ->
                 activity.onActivity { ForwardService.start(it, first.id); ForwardService.start(it, second.id) }
                 waitFor { listOf(first, second).all { app.state.value.snapshots[it.id]?.phase == Phase.LISTENING } }
+                instrumentation.runOnMainSync { app.saveServer(server.copy(icon = ServerIcon.CLOUD)) }
+                assertEquals(2, app.engine.activeCount)
+                assertEquals(Phase.LISTENING, app.state.value.snapshots[first.id]?.phase)
                 activity.moveToState(Lifecycle.State.CREATED)
                 fun request(rule: ForwardRule): String = Socket("127.0.0.1", rule.localPort).use { local ->
                     local.soTimeout = 10000
