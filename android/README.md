@@ -4,7 +4,7 @@ A native Kotlin / Jetpack Compose port-forwarding client. Requires Android 16
 (API 36) or later, targets Android 17 (API 37), and uses the same Rust server as
 the Mac app. It uses the phone's existing Tailscale VPN; it creates no second VPN.
 
-Version 0.6.1 shows every server and its forwards together in a compact, grouped
+Version 0.7 shows every server and its forwards together in a compact, grouped
 list with a blue accent and light appearance. **Add server** is in the top bar;
 each server header has a plain **Add forward** text action and a menu to check,
 edit, stop its forwards, or remove the server. Tap its icon to edit it and choose Server, Laptop, Desktop,
@@ -14,6 +14,12 @@ Each forward shows `local:remote`, a green status dot when listening,
 plain icons for **Start / Stop / Switch**, and a menu to open it in the browser,
 edit, or remove it. Controls retain standard touch targets. Background forwarding stays
 in the existing foreground service and notification.
+
+Use the toolbar's **Refresh** icon or pull down on the list to clear old errors
+and recheck every server. Error dialogs also offer **Refresh**. Active listeners
+and connections keep running; failed forwards return to stopped so you can start
+them again. A server that is still unreachable shows its latest error. A fresh
+failed app connection can report a new tunnel error after refreshing.
 
 ## Build and install
 
@@ -112,6 +118,9 @@ The grouped-screen test verifies that all servers and forwards are visible and
 that a server's add action saves the new forward under that server. It also
 checks the icon picker and persisted selection. Runtime tests verify that
 changing a server icon preserves active forwards.
+Refresh tests cover the toolbar, error dialog, and pull-down gesture, including
+clearing stale errors, reporting current failures, and keeping an existing TCP
+connection usable.
 
 `LiveConnectionTest` is an opt-in API probe for a connected physical phone. Pass
 `portsideHost` (and optionally `portsideIp`) to the instrumentation runner with

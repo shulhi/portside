@@ -182,6 +182,16 @@ class ForwardIntegrationTest {
                 waitFor { states[rule.id]?.error != null }
                 assertTrue(states[rule.id]!!.error!!.contains("not listening"))
                 assertEquals(Phase.LISTENING, states[rule.id]?.phase)
+                engine.clearErrors(setOf(rule.id))
+                assertNull(states[rule.id]?.error)
+                assertEquals(Phase.LISTENING, states[rule.id]?.phase)
+                assertEquals(1, engine.activeCount)
+                Socket("127.0.0.1", rule.localPort).use { local ->
+                    local.soTimeout = 10000
+                    runCatching { local.getInputStream().read() }
+                }
+                waitFor { states[rule.id]?.error != null }
+                assertTrue(states[rule.id]!!.error!!.contains("not listening"))
             }
         }
     }

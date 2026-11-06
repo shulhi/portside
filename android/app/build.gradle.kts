@@ -9,8 +9,8 @@ android {
         applicationId = "app.portside.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 8
-        versionName = "0.6.1"
+        versionCode = 9
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }

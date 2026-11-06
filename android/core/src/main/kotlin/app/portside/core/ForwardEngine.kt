@@ -51,6 +51,11 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
     }
     @Synchronized
     fun stopAll() { listeners.keys.toList().forEach(::stop) }
+
+    @Synchronized
+    fun clearErrors(ruleIds: Set<String>) {
+        listeners.filterKeys { it in ruleIds }.values.forEach { it.clearError() }
+    }
     override fun close() {
         stopAll(); listenerThreads.shutdownNow(); tunnelThreads.shutdownNow()
         http.dispatcher.executorService.shutdown(); http.connectionPool.evictAll()
@@ -68,6 +73,7 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
         @Synchronized fun emit() {
             if (running.get()) changed(rule.id, ForwardSnapshot(Phase.LISTENING, tunnels.size, sent.get(), received.get(), error))
         }
+        @Synchronized fun clearError() { error = null; emit() }
         fun accept() {
             try {
                 while (running.get()) {

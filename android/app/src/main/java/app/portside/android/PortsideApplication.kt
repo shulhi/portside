@@ -47,6 +47,20 @@ class PortsideApplication : Application() {
     fun snapshot(id: String, value: ForwardSnapshot) { state.update { it.copy(snapshots = it.snapshots + (id to value)) } }
     fun serverStatus(id: String, value: ServerStatus) { state.update { it.copy(serverStatuses = it.serverStatuses + (id to value)) } }
 
+    fun clearErrors(serverId: String? = null) {
+        val ruleIds = state.value.configuration.forwards.filter { serverId == null || it.serverId == serverId }.map { it.id }.toSet()
+        state.update { current -> current.copy(
+            error = if (serverId == null) null else current.error,
+            serverStatuses = current.serverStatuses.mapValues { (id, status) ->
+                if (serverId == null || id == serverId) status.copy(error = null) else status
+            },
+            snapshots = current.snapshots.mapValues { (id, snapshot) ->
+                if (id !in ruleIds) snapshot else if (snapshot.phase == Phase.FAILED) ForwardSnapshot()
+                else snapshot.copy(error = null)
+            }) }
+        engine.clearErrors(ruleIds)
+    }
+
     @Synchronized fun saveServer(server: ServerProfile) {
         server.validate()
         val config = state.value.configuration

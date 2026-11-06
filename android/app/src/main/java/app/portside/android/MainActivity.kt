@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -66,6 +67,10 @@ class MainActivity : ComponentActivity() {
                     surfaceContainer = Color(0xFFF0F3F8), surfaceContainerLow = Color(0xFFF3F5FA))) {
                 val state by app.state.collectAsStateWithLifecycle()
                 PortsideScreen(state, app,
+                    onRefresh = { networkAction(false) {
+                        app.clearErrors()
+                        app.state.value.configuration.servers.forEach(::check)
+                    } },
                     onCheck = { server -> networkAction(false) { check(server) } },
                     onStart = { rule -> networkAction(true) {
                         runCatching { ForwardService.start(this, rule.id) }.onFailure { app.report("Could not start forwarding: ${it.message}") }
@@ -87,19 +92,25 @@ class MainActivity : ComponentActivity() {
         if (needed.isEmpty()) action() else { permissionAction = action; permissions.launch(needed.toTypedArray()) }
     }
     private fun check(server: ServerProfile) {
+        app.clearErrors(server.id)
         val requestId = java.util.UUID.randomUUID().toString()
         app.serverStatus(server.id, ServerStatus(checking = true, requestId = requestId))
         val revision = app.revision
+        fun apply(status: ServerStatus) {
+            if (revision == app.revision && app.state.value.serverStatuses[server.id]?.requestId == requestId) {
+                app.serverStatus(server.id, status)
+            }
+        }
         lifecycleScope.launch {
             try {
                 val info = withContext(Dispatchers.IO) { app.info(server) }
-                if (revision == app.revision) app.serverStatus(server.id, ServerStatus(version = info.version))
+                apply(ServerStatus(version = info.version))
             } catch (e: CancellationException) {
-                if (revision == app.revision) app.serverStatus(server.id, ServerStatus())
+                apply(ServerStatus())
                 throw e
             }
             catch (e: Exception) {
-                if (revision == app.revision) app.serverStatus(server.id, ServerStatus(error = e.message ?: "Check Tailscale and the server."))
+                apply(ServerStatus(error = e.message ?: "Check Tailscale and the server."))
             } finally {
                 if (app.state.value.serverStatuses[server.id]?.requestId == requestId) {
                     app.serverStatus(server.id, ServerStatus())
@@ -113,6 +124,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PortsideScreen(
     state: AppState, app: PortsideApplication,
+    onRefresh: () -> Unit,
     onCheck: (ServerProfile) -> Unit, onStart: (ForwardRule) -> Unit,
     onStop: (ForwardRule) -> Unit, onOpen: (ForwardRule) -> Unit,
 ) {
@@ -127,6 +139,7 @@ private fun PortsideScreen(
     val servers = state.configuration.servers
     val forwardServer = servers.firstOrNull { it.id == forwardServerId }
     val active = state.configuration.forwards.count { state.snapshots[it.id]?.phase == Phase.LISTENING }
+    val refreshing = state.serverStatuses.values.any { it.checking }
 
     Scaffold(topBar = {
         TopAppBar(title = {
@@ -136,6 +149,14 @@ private fun PortsideScreen(
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }, actions = {
+            TooltipBox(positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+                tooltip = { PlainTooltip { Text("Refresh all servers and clear old errors") } }, state = rememberTooltipState()) {
+                IconButton(onClick = onRefresh, enabled = !refreshing && servers.isNotEmpty(),
+                    modifier = Modifier.semantics { contentDescription = if (refreshing) "Refreshing servers" else "Refresh all servers" }) {
+                    if (refreshing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Rounded.Refresh, null, Modifier.size(22.dp))
+                }
+            }
             FilledTonalButton(onClick = { editingServerId = null; showServer = true },
                 modifier = Modifier.padding(end = 12.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
                 Icon(painterResource(R.drawable.ic_server_add), null, Modifier.size(18.dp))
@@ -144,7 +165,8 @@ private fun PortsideScreen(
             }
         })
     }) { insets ->
-        Box(Modifier.fillMaxSize().padding(insets), contentAlignment = Alignment.TopCenter) {
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(insets), contentAlignment = Alignment.TopCenter) {
             LazyColumn(Modifier.widthIn(max = 760.dp).fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -207,7 +229,8 @@ private fun PortsideScreen(
     }
     state.error?.let { message ->
         AlertDialog(onDismissRequest = { app.report(null) }, title = { Text("Something needs attention") }, text = { Text(message) },
-            confirmButton = { TextButton(onClick = { app.report(null) }) { Text("OK") } })
+            dismissButton = { TextButton(onClick = { app.report(null) }) { Text("Dismiss") } },
+            confirmButton = { TextButton(onClick = onRefresh) { Text("Refresh") } })
     }
 }
 
