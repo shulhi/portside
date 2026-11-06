@@ -13,7 +13,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -233,7 +232,7 @@ private fun ServerHeader(server: ServerProfile, status: ServerStatus, active: In
                 Text("${server.host}:${server.port}", style = MaterialTheme.typography.labelSmall, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            OutlinedButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 10.dp),
+            TextButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 10.dp),
                 modifier = Modifier.semantics { contentDescription = "Add forward to ${server.name}" }) {
                 Text("Add forward", style = MaterialTheme.typography.labelMedium)
             }
@@ -273,16 +272,10 @@ private fun ForwardRow(rule: ForwardRule, snapshot: ForwardSnapshot, conflicting
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(Modifier.padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.padding(end = 10.dp).size(30.dp)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                    .semantics { contentDescription = "Port ${rule.localPort}, $status" }) {
-                    Icon(painterResource(R.drawable.ic_terminal), null, Modifier.align(Alignment.Center).size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Box(Modifier.align(Alignment.BottomEnd).size(9.dp)
-                        .background(if (listening) Color(0xFF219653) else if (snapshot.phase == Phase.FAILED)
-                            MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                        .border(1.5.dp, MaterialTheme.colorScheme.surfaceContainerLow, CircleShape))
-                }
+                Box(Modifier.padding(end = 10.dp).size(7.dp)
+                    .background(if (listening) Color(0xFF219653) else if (snapshot.phase == Phase.FAILED)
+                        MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                    .semantics { contentDescription = "Port ${rule.localPort}, $status" })
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("${rule.localPort}:${rule.remotePort}", fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.titleSmall)
@@ -294,10 +287,8 @@ private fun ForwardRow(rule: ForwardRule, snapshot: ForwardSnapshot, conflicting
                     else if (conflictingServer != null) "Switch to ${rule.name}" else "Start ${rule.name}"
                 TooltipBox(positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
                     tooltip = { PlainTooltip { Text(action) } }, state = rememberTooltipState()) {
-                    FilledTonalIconButton(onClick = if (listening || starting) onStop else onStart,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = if (listening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)) {
+                    IconButton(onClick = if (listening || starting) onStop else onStart,
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)) {
                         when {
                             starting -> Icon(Icons.Rounded.Close, action, Modifier.size(18.dp))
                             listening -> Icon(painterResource(R.drawable.ic_stop), action, Modifier.size(18.dp))

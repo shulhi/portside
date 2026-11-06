@@ -4,14 +4,14 @@ A native Kotlin / Jetpack Compose port-forwarding client. Requires Android 16
 (API 36) or later, targets Android 17 (API 37), and uses the same Rust server as
 the Mac app. It uses the phone's existing Tailscale VPN; it creates no second VPN.
 
-Version 0.6 shows every server and its forwards together in a compact, grouped
+Version 0.6.1 shows every server and its forwards together in a compact, grouped
 list with a blue accent and light appearance. **Add server** is in the top bar;
-each server header has **Add forward** and a menu to check, edit, stop its forwards,
-or remove the server. Tap its icon to edit it and choose Server, Laptop, Desktop,
+each server header has a plain **Add forward** text action and a menu to check,
+edit, stop its forwards, or remove the server. Tap its icon to edit it and choose Server, Laptop, Desktop,
 Home, Cloud, or Terminal. The choice persists; changing a name or icon keeps
 active forwards running. Changing its address or port stops its forwards.
-Each forward shows `local:remote`, a port icon with a green dot when listening,
-an icon for **Start / Stop / Switch**, and a menu to open it in the browser,
+Each forward shows `local:remote`, a green status dot when listening,
+plain icons for **Start / Stop / Switch**, and a menu to open it in the browser,
 edit, or remove it. Controls retain standard touch targets. Background forwarding stays
 in the existing foreground service and notification.
 
