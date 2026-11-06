@@ -4,9 +4,11 @@ A native Kotlin / Jetpack Compose port-forwarding client. Requires Android 16
 (API 36) or later, targets Android 17 (API 37), and uses the same Rust server as
 the Mac app. It uses the phone's existing Tailscale VPN; it creates no second VPN.
 
-Version 0.3 uses the same blue accent as the Mac app, with native Material controls,
-compact forward rows, and light/dark appearance. Each row has browser, start/stop,
-and more-actions controls with standard touch targets. Background forwarding stays
+Version 0.5 shows every server and its forwards together in a compact, grouped
+list with a blue accent and light appearance. Each server header has **+** to add
+a forward and a menu to check, edit, stop its forwards, or remove the server.
+Each forward has **Start / Stop / Switch** and a menu to open it in the browser,
+edit, or remove it. Controls retain standard touch targets. Background forwarding stays
 in the existing foreground service and notification.
 
 ## Build and install
@@ -37,13 +39,19 @@ distribution checksum are pinned.
    this phone's Tailscale identity and authorizes devices owned by its user.
 4. On Android 17+, allow local network / nearby device access when connecting.
    Allow notifications when starting a forward so its controls stay visible.
-5. Tap **New forward**, choosing local `3000` and remote `5173`, for example.
-6. Tap **Start** and then the browser icon to open `http://127.0.0.1:3000`.
+5. Tap **+** beside a server, choosing local `3000` and remote `5173`, for example.
+6. Tap **Start**, then **⋮ → Open in browser** to open `http://127.0.0.1:3000`.
 
 Localhost belongs to **the phone**; the example reaches port 5173 on the work
-machine. Start and stop rules independently. Switching selected servers leaves
-running forwards intact. The notification shows all active forwards and has a
+machine. Start and stop rules independently across servers: port `3000` from
+server A and port `4000` from server B can run together. The notification shows all active forwards and has a
 **Stop all** action. Editing stops affected forwards; removal asks for confirmation.
+
+Save the same local port under different servers to reuse a localhost address.
+Only one rule can use that port at a time. Tap **Switch** on an alternative to
+check its server, close the previous rule's connections, and start the replacement.
+A failed server check keeps the current rule running. Duplicate local ports on
+the same server are rejected; edit the existing rule instead.
 
 **Ready** means the most recent server check succeeded. **Listening** means the
 phone's local listener is available. Remote target failures close that TCP
@@ -84,16 +92,20 @@ bash scripts/test-emulator.sh
 
 The JVM tests run against a disposable Rust server with an isolated Tailscale CLI
 fixture. They cover address/port/frame validation, 3 MiB binary transfer, both
-half-close directions, identity and target failures, port conflicts, loopback-only
-binding and independent stop. Plain `./gradlew :core:test` needs both
+half-close directions, identity and target failures, port conflicts and switching,
+loopback-only binding and independent stop. Plain `./gradlew :core:test` needs both
 `PORTSIDE_TEST_SERVER` and `PORTSIDE_TEST_TAILSCALE` for integration cases.
 
 Emulator tests verify private profile persistence without credentials, actual
 foreground-service forwarding with the activity in the background, and stopping
-one forward while another remains usable. A disposable host Rust server and HTTP
+one forward while another remains usable. They also cover shared-port profile
+persistence, repeated server switches, and a failed replacement keeping the
+current forward usable. A disposable host Rust server and HTTP
 target are connected by a temporary `adb reverse` mapping; test profiles, mapping
 and processes are cleaned up afterward. The script selects the single connected
 emulator unless `ANDROID_SERIAL` is explicitly set. Use an Android 17 test emulator.
+The grouped-screen test verifies that all servers and forwards are visible and
+that a server's add action saves the new forward under that server.
 
 `LiveConnectionTest` is an opt-in API probe for a connected physical phone. Pass
 `portsideHost` (and optionally `portsideIp`) to the instrumentation runner with

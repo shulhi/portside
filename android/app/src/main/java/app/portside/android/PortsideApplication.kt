@@ -10,7 +10,6 @@ import org.json.JSONObject
 data class ServerStatus(val checking: Boolean = false, val version: String? = null, val error: String? = null, val requestId: String? = null)
 data class AppState(
     val configuration: Configuration = Configuration(),
-    val selectedServerId: String? = null,
     val snapshots: Map<String, ForwardSnapshot> = emptyMap(),
     val serverStatuses: Map<String, ServerStatus> = emptyMap(),
     val error: String? = null,
@@ -39,12 +38,11 @@ class PortsideApplication : Application() {
         try {
             val config = store.read()
             store.write(config)
-            state.value = AppState(configuration = config, selectedServerId = config.servers.firstOrNull()?.id)
+            state.value = AppState(configuration = config)
             canSave = true
         } catch (_: Exception) { report("Saved settings could not be read. They have been preserved; clear app storage to reset them.") }
     }
 
-    fun selectServer(id: String) { state.update { it.copy(selectedServerId = id) } }
     fun report(message: String?) { state.update { it.copy(error = message) } }
     fun snapshot(id: String, value: ForwardSnapshot) { state.update { it.copy(snapshots = it.snapshots + (id to value)) } }
     fun serverStatus(id: String, value: ServerStatus) { state.update { it.copy(serverStatuses = it.serverStatuses + (id to value)) } }
@@ -55,13 +53,13 @@ class PortsideApplication : Application() {
         val next = config.copy(servers = config.servers.filterNot { it.id == server.id } + server)
         persist(next)
         config.forwards.filter { it.serverId == server.id }.forEach { engine.stop(it.id) }
-        state.update { it.copy(selectedServerId = server.id, serverStatuses = it.serverStatuses - server.id) }
+        state.update { it.copy(serverStatuses = it.serverStatuses - server.id) }
     }
     @Synchronized fun saveForward(rule: ForwardRule) {
         rule.validate()
         val config = state.value.configuration
         require(config.servers.any { it.id == rule.serverId }) { "Choose a saved server." }
-        require(config.forwards.none { it.id != rule.id && it.localPort == rule.localPort }) { "A saved forward already uses that local port." }
+        require(config.forwards.none { it.id != rule.id && it.serverId == rule.serverId && it.localPort == rule.localPort }) { "This server already has a forward on that local port. Edit it or choose another port." }
         persist(config.copy(forwards = config.forwards.filterNot { it.id == rule.id } + rule))
         engine.stop(rule.id)
     }
@@ -69,7 +67,7 @@ class PortsideApplication : Application() {
         val config = state.value.configuration
         persist(Configuration(config.servers.filterNot { it.id == id }, config.forwards.filterNot { it.serverId == id }))
         config.forwards.filter { it.serverId == id }.forEach { engine.stop(it.id) }
-        state.update { it.copy(selectedServerId = it.configuration.servers.firstOrNull()?.id, serverStatuses = it.serverStatuses - id) }
+        state.update { it.copy(serverStatuses = it.serverStatuses - id) }
     }
     @Synchronized fun removeForward(id: String) {
         persist(state.value.configuration.let { it.copy(forwards = it.forwards.filterNot { rule -> rule.id == id }) })

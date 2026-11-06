@@ -25,12 +25,14 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
     val activeCount get() = listeners.size
 
     @Synchronized
-    fun start(rule: ForwardRule, server: ServerProfile) {
+    fun start(rule: ForwardRule, server: ServerProfile, replacingConflicts: Boolean = false) {
         rule.validate(); server.validate()
         require(rule.serverId == server.id) { "This forward belongs to a different server." }
         listeners[rule.id]?.let { it.emit(); return }
-        require(listeners.size < 16) { "At most 16 forwards can run at once." }
-        require(listeners.values.none { it.rule.localPort == rule.localPort }) { "That local port is already forwarded." }
+        val conflicts = listeners.values.filter { it.rule.localPort == rule.localPort }
+        require(replacingConflicts || conflicts.isEmpty()) { "That local port is already forwarded." }
+        require(listeners.size - conflicts.size < 16) { "At most 16 forwards can run at once." }
+        conflicts.forEach { stop(it.rule.id) }
         val socket = ServerSocket()
         try {
             socket.reuseAddress = true
@@ -58,6 +60,7 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
         val rule: ForwardRule, val server: ServerProfile, val socket: ServerSocket,
     ) {
         val running = AtomicBoolean(true)
+        private val acceptClosed = CountDownLatch(1)
         val tunnels = ConcurrentHashMap<String, Tunnel>()
         val sent = AtomicLong(); val received = AtomicLong()
         @Volatile var error: String? = null
@@ -78,15 +81,21 @@ class ForwardEngine(private val changed: (String, ForwardSnapshot) -> Unit) : Cl
                     tunnelThreads.execute { tunnel.run() }
                 }
             } catch (e: IOException) {
+                // Android can retain the listening descriptor until accept()
+                // unwinds, even after ServerSocket.close() has returned.
+                acceptClosed.countDown()
                 if (running.get()) {
                     stop(rule.id)
                     changed(rule.id, ForwardSnapshot(Phase.FAILED, error = e.message ?: "Local listener stopped."))
                 }
-            }
+            } finally { acceptClosed.countDown() }
         }
-        @Synchronized fun stop() {
-            running.set(false); socket.close()
-            tunnels.values.toList().forEach { it.finish() }
+        fun stop() {
+            synchronized(this) {
+                running.set(false); socket.close()
+                tunnels.values.toList().forEach { it.finish() }
+            }
+            acceptClosed.await(1, TimeUnit.SECONDS)
         }
 
         private inner class Tunnel(val local: Socket) : WebSocketListener() {

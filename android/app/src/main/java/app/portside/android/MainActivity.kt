@@ -7,10 +7,10 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,16 +50,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         setContent {
-            val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme(
-                    primary = Color(0xFFADC6FF), onPrimary = Color(0xFF002F68),
-                    primaryContainer = Color(0xFF164B92), onPrimaryContainer = Color(0xFFD8E6FF),
-                    secondary = Color(0xFFBDC7D8), secondaryContainer = Color(0xFF354052),
-                    surface = Color(0xFF111318), background = Color(0xFF111318),
-                    surfaceContainer = Color(0xFF1D2027), surfaceContainerLow = Color(0xFF191C22))
-                else lightColorScheme(
+            MaterialTheme(colorScheme = lightColorScheme(
                     primary = Blue, onPrimary = Color.White,
                     primaryContainer = Color(0xFFD8E6FF), onPrimaryContainer = Color(0xFF001B3E),
                     secondary = Color(0xFF566172), secondaryContainer = Color(0xFFE1E7F0),
@@ -120,111 +114,82 @@ private fun PortsideScreen(
 ) {
     var showServer by rememberSaveable { mutableStateOf(false) }
     var editingServerId by rememberSaveable { mutableStateOf<String?>(null) }
-    var showForward by rememberSaveable { mutableStateOf(false) }
+    var forwardServerId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingForwardId by rememberSaveable { mutableStateOf<String?>(null) }
     val editingServer = state.configuration.servers.firstOrNull { it.id == editingServerId }
     val editingForward = state.configuration.forwards.firstOrNull { it.id == editingForwardId }
     var removingServer by remember { mutableStateOf<ServerProfile?>(null) }
     var removingForward by remember { mutableStateOf<ForwardRule?>(null) }
-    var serverMenu by remember { mutableStateOf(false) }
-    val server = state.configuration.servers.firstOrNull { it.id == state.selectedServerId }
-    val rules = state.configuration.forwards.filter { it.serverId == server?.id }
-    val active = rules.count { state.snapshots[it.id]?.phase == Phase.LISTENING }
-    val connections = rules.sumOf { state.snapshots[it.id]?.connections ?: 0 }
+    val servers = state.configuration.servers
+    val forwardServer = servers.firstOrNull { it.id == forwardServerId }
+    val active = state.configuration.forwards.count { state.snapshots[it.id]?.phase == Phase.LISTENING }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(painterResource(R.drawable.ic_north_east), null, tint = MaterialTheme.colorScheme.primary)
-                    Text("Portside", fontWeight = FontWeight.SemiBold)
-                }
-            }, actions = {
-                IconButton(onClick = { editingServerId = null; showServer = true }) { Icon(Icons.Rounded.Add, "Add server") }
-            })
-        },
-        floatingActionButton = {
-            if (server != null) ExtendedFloatingActionButton(onClick = { editingForwardId = null; showForward = true },
-                icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New forward") })
-        },
-    ) { insets ->
-        LazyColumn(Modifier.fillMaxSize().padding(insets).widthIn(max = 760.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (server == null) {
-                item {
-                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Icon(painterResource(R.drawable.ic_server), null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
-                            Text("Connect your work server", style = MaterialTheme.typography.titleLarge)
-                            Text("Keep Tailscale connected on both devices, then add the server running Portside.")
+    Scaffold(topBar = {
+        TopAppBar(title = {
+            Column {
+                Text("Portside", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text("${servers.size} ${if (servers.size == 1) "server" else "servers"} · $active active",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }, actions = {
+            TextButton(onClick = { editingServerId = null; showServer = true }) {
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Server")
+            }
+        })
+    }) { insets ->
+        Box(Modifier.fillMaxSize().padding(insets), contentAlignment = Alignment.TopCenter) {
+            LazyColumn(Modifier.widthIn(max = 760.dp).fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (servers.isEmpty()) item {
+                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Connect your work server", style = MaterialTheme.typography.titleMedium)
+                            Text("Keep Tailscale connected on both devices, then add the server running Portside.",
+                                style = MaterialTheme.typography.bodyMedium)
                             Button(onClick = { editingServerId = null; showServer = true }) { Text("Add server") }
                         }
                     }
                 }
-            } else {
-                item {
-                    val status = state.serverStatuses[server.id] ?: ServerStatus()
-                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(painterResource(R.drawable.ic_server), null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(8.dp))
-                                Box(Modifier.weight(1f)) {
-                                    TextButton(onClick = { serverMenu = true }, contentPadding = PaddingValues(0.dp)) {
-                                        Text(server.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                                        Icon(Icons.Rounded.KeyboardArrowDown, null)
-                                    }
-                                    DropdownMenu(serverMenu, { serverMenu = false }) {
-                                        state.configuration.servers.forEach { profile ->
-                                            DropdownMenuItem(text = { Text(profile.name) }, onClick = { app.selectServer(profile.id); serverMenu = false })
-                                        }
-                                        HorizontalDivider()
-                                        DropdownMenuItem(text = { Text("Edit server") }, onClick = { editingServerId = server.id; showServer = true; serverMenu = false })
-                                        DropdownMenuItem(text = { Text("Remove server") }, onClick = { removingServer = server; serverMenu = false })
-                                    }
-                                }
-                                FilledTonalIconButton(onClick = { onCheck(server) }, enabled = !status.checking) {
-                                    if (status.checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    else Icon(Icons.Rounded.Refresh, "Check connection")
-                                }
-                            }
-                            Text("${server.host}:${server.port}", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                            if (status.version != null) Text("Ready · server ${status.version}", style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary)
-                            else Text(status.error ?: "Check the connection to verify this server.", style = MaterialTheme.typography.bodySmall,
-                                color = if (status.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                servers.forEach { server ->
+                    val rules = state.configuration.forwards.filter { it.serverId == server.id }
+                    item(key = "server:${server.id}") {
+                        ServerHeader(server, state.serverStatuses[server.id] ?: ServerStatus(),
+                            active = rules.count { state.snapshots[it.id]?.phase == Phase.LISTENING },
+                            canStop = rules.any { state.snapshots[it.id]?.phase in listOf(Phase.LISTENING, Phase.STARTING) },
+                            onAdd = { editingForwardId = null; forwardServerId = server.id },
+                            onCheck = { onCheck(server) },
+                            onEdit = { editingServerId = server.id; showServer = true },
+                            onRemove = { removingServer = server },
+                            onStop = { rules.filter { state.snapshots[it.id]?.phase in listOf(Phase.LISTENING, Phase.STARTING) }.forEach(onStop) })
+                    }
+                    if (rules.isEmpty()) item(key = "empty:${server.id}") {
+                        Text("No forwards", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                    }
+                    items(rules, key = { "forward:${it.id}" }) { rule ->
+                        val other = state.configuration.forwards.firstOrNull { candidate ->
+                            candidate.id != rule.id && candidate.localPort == rule.localPort &&
+                                state.snapshots[candidate.id]?.phase in listOf(Phase.STARTING, Phase.LISTENING)
                         }
+                        val conflictingServer = servers.firstOrNull { it.id == other?.serverId }?.name
+                        ForwardRow(rule, state.snapshots[rule.id] ?: ForwardSnapshot(), conflictingServer,
+                            onStart = { onStart(rule) }, onStop = { onStop(rule) }, onOpen = { onOpen(rule) },
+                            onEdit = { editingForwardId = rule.id; forwardServerId = rule.serverId },
+                            onRemove = { removingForward = rule })
                     }
-                }
-                item {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Port forwards", style = MaterialTheme.typography.titleMedium)
-                        Text("$active active · $connections connections", style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (rules.isEmpty()) item {
-                    Text("Add an app port, start the forward, and open it in your browser.", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp))
-                }
-                items(rules, key = { it.id }) { rule ->
-                    ForwardCard(rule, state.snapshots[rule.id] ?: ForwardSnapshot(),
-                        onStart = { onStart(rule) }, onStop = { onStop(rule) }, onOpen = { onOpen(rule) },
-                        onEdit = { editingForwardId = rule.id; showForward = true }, onRemove = { removingForward = rule })
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Listeners stay on this phone. Traffic travels through Tailscale. Active forwards appear in a notification.",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    item(key = "spacing:${server.id}") { Spacer(Modifier.height(8.dp)) }
                 }
             }
         }
     }
     if (showServer) ServerEditor(editingServer, onDismiss = { showServer = false }, onSave = app::saveServer)
-    if (showForward && server != null) ForwardEditor(server, editingForward, onDismiss = { showForward = false }, onSave = app::saveForward)
+    if (forwardServer != null) key(forwardServer.id, editingForwardId) {
+        ForwardEditor(forwardServer, editingForward, onDismiss = { forwardServerId = null }, onSave = app::saveForward)
+    }
     removingForward?.let { rule ->
         ConfirmRemoval("Remove ${rule.name}?", "Its listener and active connections will close.", { removingForward = null }) {
             runCatching { app.removeForward(rule.id) }.onFailure { app.report(it.message) }; removingForward = null
@@ -242,7 +207,46 @@ private fun PortsideScreen(
 }
 
 @Composable
-private fun ForwardCard(rule: ForwardRule, snapshot: ForwardSnapshot, onStart: () -> Unit, onStop: () -> Unit,
+private fun ServerHeader(server: ServerProfile, status: ServerStatus, active: Int, canStop: Boolean,
+    onAdd: () -> Unit, onCheck: () -> Unit, onEdit: () -> Unit, onRemove: () -> Unit, onStop: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (status.checking) CircularProgressIndicator(Modifier.padding(horizontal = 10.dp).size(18.dp), strokeWidth = 2.dp)
+            else Icon(painterResource(R.drawable.ic_server), null, Modifier.padding(horizontal = 10.dp).size(18.dp),
+                tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(server.name, style = MaterialTheme.typography.titleSmall, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (active > 0 || status.version != null) Text(if (active > 0) "$active active" else "Ready", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                Text("${server.host}:${server.port}", style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onAdd) { Icon(Icons.Rounded.Add, "Add forward to ${server.name}", Modifier.size(22.dp)) }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for server ${server.name}", Modifier.size(20.dp)) }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text("Check connection") }, enabled = !status.checking,
+                        onClick = { menu = false; onCheck() })
+                    DropdownMenuItem(text = { Text("Edit server") }, onClick = { menu = false; onEdit() })
+                    DropdownMenuItem(text = { Text("Stop forwards") }, enabled = canStop, onClick = { menu = false; onStop() })
+                    HorizontalDivider()
+                    DropdownMenuItem(text = { Text("Remove server") }, onClick = { menu = false; onRemove() })
+                }
+            }
+        }
+        status.error?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun ForwardRow(rule: ForwardRule, snapshot: ForwardSnapshot, conflictingServer: String?, onStart: () -> Unit, onStop: () -> Unit,
     onOpen: () -> Unit, onEdit: () -> Unit, onRemove: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val listening = snapshot.phase == Phase.LISTENING
@@ -251,39 +255,31 @@ private fun ForwardCard(rule: ForwardRule, snapshot: ForwardSnapshot, onStart: (
         Phase.LISTENING -> "Listening · ${snapshot.connections} connections"
         Phase.STARTING -> "Starting…"
         Phase.FAILED -> "Failed"
-        Phase.STOPPED -> "Stopped"
+        Phase.STOPPED -> conflictingServer?.let { "In use by $it" } ?: "Stopped"
     }
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(rule.name, style = MaterialTheme.typography.titleSmall, maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("${rule.localPort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${rule.remotePort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("${rule.localPort}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleSmall,
+                            color = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        Text(rule.name, style = MaterialTheme.typography.bodySmall, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
-                    Text(status, style = MaterialTheme.typography.labelSmall, maxLines = 1,
-                        color = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("→ ${rule.remotePort} · $status", style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = onOpen, enabled = listening) {
-                    Icon(painterResource(R.drawable.ic_browser), "Open ${rule.name} in browser", Modifier.size(20.dp))
-                }
-                FilledTonalIconButton(onClick = if (listening || starting) onStop else onStart) {
-                    if (starting) {
-                        Icon(Icons.Rounded.Close, "Cancel ${rule.name}", Modifier.size(20.dp))
-                    } else if (listening) {
-                        Icon(painterResource(R.drawable.ic_stop), "Stop ${rule.name}", Modifier.size(20.dp))
-                    } else {
-                        Icon(Icons.Rounded.PlayArrow, "Start ${rule.name}", Modifier.size(20.dp))
-                    }
+                TextButton(onClick = if (listening || starting) onStop else onStart,
+                    contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    Text(if (starting) "Cancel" else if (listening) "Stop" else if (conflictingServer != null) "Switch" else "Start")
                 }
                 Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for ${rule.name}", Modifier.size(20.dp)) }
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions for forward ${rule.name}", Modifier.size(20.dp)) }
                     DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem(text = { Text("Open in browser") }, enabled = listening, onClick = { menu = false; onOpen() })
                         DropdownMenuItem(text = { Text("Edit forward") }, onClick = { menu = false; onEdit() })
                         DropdownMenuItem(text = { Text("Remove forward") }, onClick = { menu = false; onRemove() })
                     }
@@ -291,7 +287,7 @@ private fun ForwardCard(rule: ForwardRule, snapshot: ForwardSnapshot, onStart: (
             }
             snapshot.error?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(end = 8.dp, top = 4.dp, bottom = 4.dp))
+                    modifier = Modifier.padding(end = 8.dp, top = 2.dp, bottom = 4.dp))
             }
         }
     }
@@ -344,7 +340,7 @@ private fun ForwardEditor(server: ServerProfile, existing: ForwardRule?, onDismi
                 Text("IPv6 server loopback", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 Switch(ipv6, { ipv6 = it })
             }
-            Text("Open http://127.0.0.1:$local on this phone after starting. Saving leaves this forward stopped.", style = MaterialTheme.typography.bodySmall)
+            Text("Open http://127.0.0.1:$local on this phone after starting. Saving leaves this forward stopped. You can reuse a local port on another server; starting it switches that port and closes the previous connections.", style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
     }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = {

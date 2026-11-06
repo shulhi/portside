@@ -15,6 +15,56 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.*
 
 class ForwardIntegrationTest {
+    @Test fun switchingServersReusesThePortAndClosesOldConnections() {
+        Rust().use { firstServer -> Rust().use { secondServer ->
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { firstTarget ->
+                ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { secondTarget ->
+                    val pool = Executors.newFixedThreadPool(2)
+                    try {
+                        val first = pool.submit {
+                            firstTarget.accept().use { socket ->
+                                socket.soTimeout = 8000
+                                assertEquals(1, socket.getInputStream().read())
+                                socket.getOutputStream().write(11)
+                                assertEquals(-1, socket.getInputStream().read())
+                            }
+                        }
+                        val second = pool.submit {
+                            secondTarget.accept().use { socket ->
+                                socket.soTimeout = 8000
+                                assertEquals(2, socket.getInputStream().read())
+                                socket.getOutputStream().write(22)
+                            }
+                        }
+                        val states = ConcurrentHashMap<String, ForwardSnapshot>()
+                        ForwardEngine { id, snapshot -> states[id] = snapshot }.use { engine ->
+                            val a = ForwardRule(serverId = firstServer.profile.id, name = "First", localPort = freePort(), remotePort = firstTarget.localPort)
+                            val b = ForwardRule(serverId = secondServer.profile.id, name = "Second", localPort = a.localPort, remotePort = secondTarget.localPort)
+                            engine.start(a, firstServer.profile)
+                            Socket("127.0.0.1", a.localPort).use { old ->
+                                old.soTimeout = 8000
+                                old.getOutputStream().write(1)
+                                assertEquals(11, old.getInputStream().read())
+                                engine.start(b, secondServer.profile, replacingConflicts = true)
+                                assertEquals(Phase.STOPPED, states[a.id]?.phase)
+                                assertEquals(Phase.LISTENING, states[b.id]?.phase)
+                                assertEquals(1, engine.activeCount)
+                                assertEquals(-1, old.getInputStream().read())
+                            }
+                            Socket("127.0.0.1", b.localPort).use { current ->
+                                current.soTimeout = 8000
+                                current.getOutputStream().write(2)
+                                assertEquals(22, current.getInputStream().read())
+                            }
+                            first.get(8, TimeUnit.SECONDS)
+                            second.get(8, TimeUnit.SECONDS)
+                        }
+                    } finally { pool.shutdownNow() }
+                }
+            }
+        } }
+    }
+
     private fun freePort() = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
     private fun waitFor(predicate: () -> Boolean) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)

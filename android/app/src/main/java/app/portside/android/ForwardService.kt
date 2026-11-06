@@ -52,6 +52,13 @@ class ForwardService : Service() {
         return START_NOT_STICKY
     }
     private fun start(id: String) {
+        val requested = app.state.value.configuration.forwards.firstOrNull { it.id == id }
+        if (requested == null) { app.report("This forward was removed."); refresh(); return }
+        // Cancel older checks for this port. Keep an established listener running
+        // until the replacement has passed its connection and port-policy checks.
+        val olderStarts = app.state.value.configuration.forwards.filter {
+            it.id != id && it.localPort == requested.localPort && starts.containsKey(it.id)
+        }.mapNotNull { older -> starts.remove(older.id)?.let { older to it } }
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 val config = app.state.value.configuration
@@ -62,7 +69,9 @@ class ForwardService : Service() {
                 check(revision == app.revision) { "Settings changed. Start this forward again." }
                 check(info.allows(rule.remotePort)) { "The server does not allow this remote port." }
                 app.serverStatus(server.id, ServerStatus(version = info.version))
-                app.engine.start(rule, server)
+                ensureActive()
+                check(starts[id] === currentCoroutineContext()[Job]) { "This start was superseded." }
+                app.engine.start(rule, server, replacingConflicts = true)
             } catch (e: CancellationException) {
                 if (starts[id] === currentCoroutineContext()[Job]) app.engine.stop(id)
                 throw e
@@ -75,6 +84,14 @@ class ForwardService : Service() {
         }
         starts[id] = job
         app.snapshot(id, ForwardSnapshot(Phase.STARTING))
+        // Register the new request first so an older job's cleanup cannot
+        // stop the foreground service while this request is still pending.
+        olderStarts.forEach { (older, previous) ->
+            if (app.state.value.snapshots[older.id]?.phase == Phase.STARTING) {
+                app.snapshot(older.id, ForwardSnapshot())
+            }
+            previous.cancel()
+        }
         job.start()
     }
     private fun refresh() {

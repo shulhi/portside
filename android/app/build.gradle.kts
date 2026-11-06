@@ -9,8 +9,8 @@ android {
         applicationId = "app.portside.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 6
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
@@ -28,4 +28,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.3")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Compose's older transitive Espresso uses an InputManager API removed in Android 17.
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }
